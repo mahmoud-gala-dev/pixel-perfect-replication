@@ -110,9 +110,10 @@ export class AIGateway {
       }
     }
 
-    // 3. Persist User Message
-    let userMessageId = `msg-${Date.now()}-u`;
-    if (!execOptions.skipDbPersistence) {
+    // 3. Persist User Message (skip if retrying a failed assistant response)
+    const isRetry = Boolean(options?.is_retry);
+    let userMessageId = options?.retry_user_message_id ?? `msg-${Date.now()}-u`;
+    if (!execOptions.skipDbPersistence && !isRetry) {
       try {
         const { data: insertedUserMsg } = await supabase
           .from("messages")

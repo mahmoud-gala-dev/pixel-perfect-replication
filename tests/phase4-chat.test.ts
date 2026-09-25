@@ -167,6 +167,25 @@ describe("KNOWLEDGE BRAIN — PHASE 4 ACCEPTANCE TESTS", () => {
     assert.equal(response.status, "failed");
     assert.ok(response.content.includes("Error: Provider rate limit reached"));
     assert.ok(response.error?.includes("429"));
+
+    // Verify retry recovery with is_retry flag
+    const retryResponse = await AIGateway.executeChat(
+      {
+        conversation_id: "conv-fail-test",
+        message: "This will fail",
+        options: {
+          is_retry: true,
+          retry_user_message_id: "msg-orig-user",
+        },
+      },
+      {
+        provider: new MockBrainProvider(),
+        skipDbPersistence: true,
+      },
+    );
+
+    assert.equal(retryResponse.status, "completed");
+    assert.equal(retryResponse.conversation_id, "conv-fail-test");
   });
 
   // -------------------------------------------------------------------

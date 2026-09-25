@@ -179,17 +179,23 @@ function renderInline(text: string): React.ReactNode[] {
     } else if (matched.startsWith("[")) {
       const linkMatch = /\[([^\]]+)\]\(([^)]+)\)/.exec(matched);
       if (linkMatch) {
-        tokens.push(
-          <a
-            key={match.index}
-            href={linkMatch[2]}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary underline hover:text-primary/80"
-          >
-            {linkMatch[1]}
-          </a>,
-        );
+        const rawUrl = linkMatch[2]?.trim() ?? "";
+        const isSafe = rawUrl.startsWith("http://") || rawUrl.startsWith("https://") || rawUrl.startsWith("/");
+        if (isSafe) {
+          tokens.push(
+            <a
+              key={match.index}
+              href={rawUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline hover:text-primary/80"
+            >
+              {linkMatch[1]}
+            </a>,
+          );
+        } else {
+          tokens.push(<span key={match.index}>{linkMatch[1]}</span>);
+        }
       } else {
         tokens.push(matched);
       }

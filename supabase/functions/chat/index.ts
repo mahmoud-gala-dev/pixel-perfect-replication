@@ -70,24 +70,29 @@ serve(async (req: Request) => {
 
     const trimmedMessage = message.trim();
     const useBrainContext = options?.use_brain_context !== false;
+    const isRetry = Boolean(options?.is_retry);
 
-    // 2. Persist user message
-    const { data: userMsg, error: userMsgErr } = await supabase
-      .from("messages")
-      .insert({
-        conversation_id,
-        role: "user",
-        content: trimmedMessage,
-        user_id: user.id,
-      })
-      .select("id")
-      .single();
+    // 2. Persist user message (skip on retry to prevent duplication)
+    let userMsgId = options?.retry_user_message_id ?? "";
+    if (!isRetry) {
+      const { data: userMsg, error: userMsgErr } = await supabase
+        .from("messages")
+        .insert({
+          conversation_id,
+          role: "user",
+          content: trimmedMessage,
+          user_id: user.id,
+        })
+        .select("id")
+        .single();
 
-    if (userMsgErr) {
-      return new Response(
-        JSON.stringify({ error: `Failed to persist user message: ${userMsgErr.message}` }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      if (userMsgErr) {
+        return new Response(
+          JSON.stringify({ error: `Failed to persist user message: ${userMsgErr.message}` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      userMsgId = userMsg?.id ?? "";
     }
 
     // 3. Retrieve Brain Context (READ ONLY via RPC)
@@ -205,6 +210,9 @@ serve(async (req: Request) => {
           status: "completed",
           latency_ms: latencyMs,
           brain_context_used: hasBrainContext,
+          retrieved_node_ids: ((references["nodes"] as Array<{ id?: string }>) ?? []).map((n) => n.id).filter(Boolean),
+          retrieved_claim_ids: ((references["claims"] as Array<{ id?: string }>) ?? []).map((c) => c.id).filter(Boolean),
+          retrieved_relation_ids: ((references["relations"] as Array<{ id?: string }>) ?? []).map((r) => r.id).filter(Boolean),
           references,
         },
       })

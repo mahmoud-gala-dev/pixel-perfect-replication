@@ -24,6 +24,8 @@ import {
   PanelLeftClose,
   PanelLeft,
   X,
+  Trash2,
+  Paperclip,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
@@ -158,7 +160,15 @@ export function ChatPage() {
 
   // 4. Send Message Mutation (AI Gateway)
   const sendMessageMutation = useMutation({
-    mutationFn: async ({ messageText, retryMsgId }: { messageText: string; retryMsgId?: string }) => {
+    mutationFn: async ({
+      messageText,
+      isRetry,
+      retryMsgId,
+    }: {
+      messageText: string;
+      isRetry?: boolean;
+      retryMsgId?: string;
+    }) => {
       let targetConvId = activeId;
 
       // Create conversation if none active
@@ -180,6 +190,8 @@ export function ChatPage() {
             use_brain_context: useBrainContext,
             model: selectedModel,
             idempotency_key: idempotencyKey,
+            is_retry: isRetry,
+            retry_user_message_id: retryMsgId,
           },
         });
         return { response, targetConvId };
@@ -225,6 +237,21 @@ export function ChatPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  // 7. Delete Conversation Mutation (Soft-delete)
+  const deleteMutation = useMutation({
+    mutationFn: async (convId: string) => {
+      await ChatService.deleteConversation(convId);
+      if (activeId === convId) {
+        setActiveId(null);
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      toast.success("Conversation deleted.");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   // Handle Send submission
   const handleSend = () => {
     const text = draft.trim();
@@ -252,8 +279,15 @@ export function ChatPage() {
         <div className="flex items-center gap-2">
           <Button
             size="sm"
-            onClick={() => createConversationMutation.mutate("New conversation")}
-            disabled={createConversationMutation.isPending}
+            onClick={() => {
+              if (activeId && messages.length === 0) {
+                textareaRef.current?.focus();
+                return;
+              }
+              setActiveId(null);
+              setDraft("");
+              textareaRef.current?.focus();
+            }}
             className="gap-1.5"
           >
             <Plus className="size-4" /> New Chat
@@ -368,6 +402,15 @@ export function ChatPage() {
                             <Archive className="mr-2 size-3.5 text-amber-500" /> Archive
                           </DropdownMenuItem>
                         )}
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteMutation.mutate(conv.id);
+                          }}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="mr-2 size-3.5" /> Delete
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -479,7 +522,7 @@ export function ChatPage() {
                 return (
                   <div
                     key={message.id}
-                    className={cn("flex gap-3 max-w-3xl", isUser ? "ml-auto justify-end" : "mr-auto justify-start")}
+                    className={cn("group/msg flex gap-3 max-w-3xl", isUser ? "ml-auto justify-end" : "mr-auto justify-start")}
                   >
                     {!isUser && (
                       <div className="flex size-8 shrink-0 select-none items-center justify-center rounded-lg bg-primary/15 text-primary border border-primary/20">
@@ -529,7 +572,39 @@ export function ChatPage() {
                         )}
                       </div>
 
-                      {/* Footer / Retry */}
+                      {/* Attached Sources Reference */}
+                      {!isUser && brainContextUsed && references?.claims && (
+                        (() => {
+                          const sourceTitles = Array.from(
+                            new Set(
+                              references.claims
+                                .map((c) => c.source?.title)
+                                .filter((t): t is string => Boolean(t)),
+                            ),
+                          );
+                          if (sourceTitles.length === 0) return null;
+                          return (
+                            <div className="flex flex-wrap items-center gap-1.5 pt-0.5 px-1 text-[11px] text-muted-foreground">
+                              <span className="font-semibold text-[10px] uppercase tracking-wider text-muted-foreground/80">Sources:</span>
+                              {sourceTitles.map((title, idx) => (
+                                <Badge
+                                  key={idx}
+                                  variant="outline"
+                                  className="text-[10px] py-0 px-1.5 h-4 font-normal cursor-pointer hover:bg-accent transition-colors"
+                                  onClick={() => {
+                                    setInspectReferences(references ?? null);
+                                    setInspectModalOpen(true);
+                                  }}
+                                >
+                                  {title}
+                                </Badge>
+                              ))}
+                            </div>
+                          );
+                        })()
+                      )}
+
+                      {/* Footer Actions: Retry or Regenerate */}
                       {!isUser && isFailed && (
                         <div className="flex items-center gap-2 pt-1 text-xs">
                           <Button
@@ -542,11 +617,39 @@ export function ChatPage() {
                                 .reverse()
                                 .find((m) => m.role === "user");
                               if (prevUser) {
-                                sendMessageMutation.mutate({ messageText: prevUser.content });
+                                sendMessageMutation.mutate({
+                                  messageText: prevUser.content,
+                                  isRetry: true,
+                                  retryMsgId: prevUser.id,
+                                });
                               }
                             }}
                           >
                             <RotateCcw className="size-3" /> Retry Generation
+                          </Button>
+                        </div>
+                      )}
+
+                      {!isUser && !isFailed && (
+                        <div className="flex items-center gap-2 pt-0.5 px-1 text-xs opacity-0 group-hover/msg:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 text-[10px] px-1.5 gap-1 text-muted-foreground hover:text-foreground"
+                            onClick={() => {
+                              const prevUser = [...messages]
+                                .reverse()
+                                .find((m) => m.role === "user");
+                              if (prevUser) {
+                                sendMessageMutation.mutate({
+                                  messageText: prevUser.content,
+                                  isRetry: true,
+                                  retryMsgId: prevUser.id,
+                                });
+                              }
+                            }}
+                          >
+                            <RotateCcw className="size-2.5" /> Regenerate
                           </Button>
                         </div>
                       )}
@@ -611,6 +714,15 @@ export function ChatPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled
+                    className="h-8 w-8 p-0 text-muted-foreground/60 hover:text-muted-foreground"
+                    title="Document attachments (prepared for Phase 5)"
+                  >
+                    <Paperclip className="size-3.5" />
+                  </Button>
                   <Button
                     size="sm"
                     disabled={!draft.trim() || isGenerating || activeConversation?.status === "archived"}

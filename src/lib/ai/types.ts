@@ -89,6 +89,8 @@ export interface ChatRequestOptions {
   model?: string | undefined;
   temperature?: number | undefined;
   idempotency_key?: string | undefined;
+  is_retry?: boolean | undefined;
+  retry_user_message_id?: string | undefined;
 }
 
 export interface ChatRequestContract {
