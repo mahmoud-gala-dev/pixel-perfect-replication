@@ -92,7 +92,7 @@ export class KnowledgeSearchService {
 
     if (dataset) {
       return dataset.nodes.filter(
-        (n) => n.deleted_at === null && (n.name === raw || n.canonical_name === raw),
+        (n) => !n.deleted_at && (n.name === raw || n.canonical_name === raw),
       );
     }
 
@@ -133,7 +133,7 @@ export class KnowledgeSearchService {
       );
       if (aliasMatch) {
         const targetNode = dataset.nodes.find(
-          (n) => n.id === aliasMatch.node_id && n.deleted_at === null,
+          (n) => n.id === aliasMatch.node_id && !n.deleted_at,
         );
         if (targetNode) {
           return { node: targetNode, alias: aliasMatch.alias };
@@ -180,7 +180,7 @@ export class KnowledgeSearchService {
     if (dataset) {
       const results: Array<{ node: KnowledgeNode; score: number }> = [];
       for (const node of dataset.nodes) {
-        if (node.deleted_at !== null) continue;
+        if (node.deleted_at) continue;
         if (options.nodeType && node.node_type !== options.nodeType) continue;
 
         const nameSim = calculateNameSimilarity(raw, node.name);
@@ -255,7 +255,7 @@ export class KnowledgeSearchService {
       const results: Array<{ node: KnowledgeNode; similarity: number }> = [];
 
       for (const node of dataset.nodes) {
-        if (node.deleted_at !== null) continue;
+        if (node.deleted_at) continue;
         if (options.nodeType && node.node_type !== options.nodeType) continue;
 
         let nodeVec = dataset.nodeEmbeddings?.get(node.id);

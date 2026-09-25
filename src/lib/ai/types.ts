@@ -89,8 +89,16 @@ export interface AIProvider {
   streamChat?(params: AIChatParams): AsyncIterable<string>;
 }
 
+import type {
+  AnswerMode,
+  GroundingState,
+  AnswerClaim,
+  GraphPath,
+} from "./rag/types";
+
 export interface ChatRequestOptions {
   use_brain_context?: boolean | undefined;
+  answer_mode?: AnswerMode | undefined;
   model?: string | undefined;
   temperature?: number | undefined;
   idempotency_key?: string | undefined;
@@ -110,6 +118,19 @@ export interface ChatResponseContract {
   content: string;
   status: "completed" | "failed";
   brain_context_used: boolean;
+  grounding_state?: GroundingState | undefined;
+  answer_mode?: AnswerMode | undefined;
+  retrieval_run_id?: string | undefined;
+  claim_ledger?: AnswerClaim[] | undefined;
+  graph_paths?: GraphPath[] | undefined;
+  sources?: Array<{
+    id: string;
+    title: string;
+    url?: string | null | undefined;
+    source_quality?: string | undefined;
+    availability?: string | undefined;
+  }> | undefined;
+  conflicts_detected?: Array<{ claim_id: string; statement: string }> | undefined;
   references?: {
     nodes: BrainContextNode[];
     claims: BrainContextClaim[];
@@ -124,6 +145,7 @@ export interface ChatResponseContract {
       completionTokens?: number | undefined;
       totalTokens?: number | undefined;
     } | undefined;
+    retrieval_summary?: Record<string, unknown> | undefined;
   } | undefined;
   error?: string | undefined;
 }

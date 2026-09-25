@@ -3,10 +3,14 @@
 // =====================================================================
 
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { BrainContextBuilder, type BuildContextOptions } from "./brain-context-builder";
 import { buildSystemPromptWithContext } from "./system-prompt";
 import { OpenAICompatibleProvider } from "./providers/openai-compatible";
 import { MockBrainProvider } from "./providers/mock-brain-provider";
+import { BrainRetrievalEngine } from "./rag/brain-retrieval-engine";
+import { ClaimLedgerEngine } from "./rag/claim-ledger-engine";
+import type { AnswerMode, GroundingState, RetrievalResultPackage } from "./rag/types";
 import type {
   AIProvider,
   ChatMessage,
@@ -142,7 +146,8 @@ export class AIGateway {
       }
     }
 
-    // 4. Retrieve Brain Context (READ ONLY)
+    // 4. Retrieve Brain Context (READ ONLY via BrainRetrievalEngine)
+    const answerMode: AnswerMode = options?.answer_mode ?? "BRAIN_PREFERRED";
     let brainContextText = "";
     let hasBrainContext = false;
     let references: ChatResponseContract["references"] = {
@@ -150,22 +155,45 @@ export class AIGateway {
       claims: [],
       relations: [],
     };
+    let retrievalPackage: RetrievalResultPackage | null = null;
 
     if (useBrainContext) {
-      const retrieved = await BrainContextBuilder.retrieveContext(
+      const retrievalEngine = new BrainRetrievalEngine(execOptions.skipDbPersistence ? null : supabase);
+      retrievalPackage = await retrievalEngine.retrieve(
         trimmedMessage,
-        execOptions.mockContextData ? { mockData: execOptions.mockContextData } : {},
+        execOptions.mockContextData
+          ? {
+              searchDataset: { nodes: (execOptions.mockContextData.nodes || []) as any },
+              graphDataset: {
+                nodes: (execOptions.mockContextData.nodes || []) as any,
+                edges: (execOptions.mockContextData.edges || []) as any,
+              },
+              claimDataset: {
+                claims: (execOptions.mockContextData.claims || []) as any,
+              },
+            }
+          : undefined,
+        {
+          answerMode,
+          conversationId: conversation_id,
+          userMessageId,
+        },
       );
 
-      if (retrieved.hasContext) {
-        brainContextText = retrieved.formattedText;
-        hasBrainContext = true;
-        references = retrieved.references;
-      }
+      const builtContext = BrainContextBuilder.buildContextFromPackage(retrievalPackage);
+      brainContextText = builtContext.formattedText;
+      hasBrainContext = builtContext.hasContext;
+      references = builtContext.references;
     }
 
-    // 5. Build System Prompt with Context
-    const systemPrompt = buildSystemPromptWithContext(hasBrainContext ? brainContextText : null);
+    // 5. Build Grounded System Prompt with Context
+    const systemPrompt = buildSystemPromptWithContext(
+      hasBrainContext ? brainContextText : null,
+      {
+        answerMode,
+        hasSufficientKnowledge: retrievalPackage?.hasSufficientKnowledge,
+      },
+    );
 
     // 6. Assemble context messages (history + new user message)
     const contextMessages: ChatMessage[] = [
@@ -173,60 +201,75 @@ export class AIGateway {
       { role: "user", content: trimmedMessage, id: userMessageId },
     ];
 
-    // 7. Invoke LLM Provider
+    // 7. Invoke LLM Provider (or state insufficient knowledge in BRAIN_ONLY mode)
     let assistantContent = "";
     let responseModel = options?.model ?? "brain-assistant";
     let tokenUsage: { promptTokens?: number | undefined; completionTokens?: number | undefined; totalTokens?: number | undefined } | undefined;
 
-    try {
-      const aiResponse = await provider.chat({
-        messages: contextMessages,
-        systemPrompt,
-        temperature: options?.temperature ?? 0.3,
-        ...(options?.model ? { model: options.model } : {}),
-      });
+    if (answerMode === "BRAIN_ONLY" && retrievalPackage && !retrievalPackage.hasSufficientKnowledge) {
+      assistantContent = "I don't have enough grounded knowledge in the Brain to answer this reliably.";
+    } else {
+      try {
+        const aiResponse = await provider.chat({
+          messages: contextMessages,
+          systemPrompt,
+          temperature: options?.temperature ?? 0.3,
+          ...(options?.model ? { model: options.model } : {}),
+        });
 
-      assistantContent = aiResponse.content;
-      responseModel = aiResponse.model;
-      tokenUsage = aiResponse.usage;
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : "AI Provider generation error";
-      
-      // Persist failed message state if applicable
-      const failedResponse: ChatResponseContract = {
-        message_id: `msg-${Date.now()}-err`,
-        conversation_id,
-        content: `Error: ${errorMsg}. Please verify your connection or try again.`,
-        status: "failed",
-        brain_context_used: false,
-        error: errorMsg,
-      };
+        assistantContent = aiResponse.content;
+        responseModel = aiResponse.model;
+        tokenUsage = aiResponse.usage;
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "AI Provider generation error";
+        
+        // Persist failed message state if applicable
+        const failedResponse: ChatResponseContract = {
+          message_id: `msg-${Date.now()}-err`,
+          conversation_id,
+          content: `Error: ${errorMsg}. Please verify your connection or try again.`,
+          status: "failed",
+          brain_context_used: false,
+          error: errorMsg,
+        };
 
-      if (!execOptions.skipDbPersistence) {
-        try {
-          await supabase.from("messages").insert({
-            conversation_id,
-            role: "assistant",
-            content: failedResponse.content,
-            model: responseModel,
-            metadata: {
-              status: "failed",
-              error: errorMsg,
-              latency_ms: Date.now() - startTime,
-            },
-          });
-        } catch {
-          // Ignore secondary logging error
+        if (!execOptions.skipDbPersistence) {
+          try {
+            await supabase.from("messages").insert({
+              conversation_id,
+              role: "assistant",
+              content: failedResponse.content,
+              model: responseModel,
+              metadata: {
+                status: "failed",
+                error: errorMsg,
+                latency_ms: Date.now() - startTime,
+              },
+            });
+          } catch {
+            // Ignore secondary logging error
+          }
         }
-      }
 
-      return failedResponse;
+        return failedResponse;
+      }
     }
 
     const latencyMs = Date.now() - startTime;
     let assistantMessageId = `msg-${Date.now()}-a`;
 
-    // 8. Persist Assistant Message
+    // 8. Claim Ledger & Attribution
+    let claimLedgerResult: any = null;
+    if (retrievalPackage) {
+      const ledgerEngine = new ClaimLedgerEngine(execOptions.skipDbPersistence ? null : supabase);
+      claimLedgerResult = await ledgerEngine.buildClaimLedger(
+        assistantContent,
+        retrievalPackage,
+        assistantMessageId,
+      );
+    }
+
+    // 9. Persist Assistant Message
     if (!execOptions.skipDbPersistence) {
       try {
         const { data: insertedAssistantMsg } = await supabase
@@ -237,16 +280,33 @@ export class AIGateway {
             content: assistantContent,
             model: responseModel,
             token_count: tokenUsage?.totalTokens ?? null,
-            metadata: {
+            metadata: ({
               status: "completed",
               provider: provider.name,
               latency_ms: latencyMs,
               brain_context_used: hasBrainContext,
+              grounding_state: claimLedgerResult?.groundingState ?? "UNKNOWN",
+              answer_mode: answerMode,
+              retrieval_run_id: retrievalPackage?.retrievalRunId || null,
               retrieved_node_ids: references.nodes.map((n) => n.id),
               retrieved_claim_ids: references.claims.map((c) => c.id),
               retrieved_relation_ids: references.relations.map((r) => r.id),
+              claim_ledger: claimLedgerResult?.answerClaims ?? [],
+              graph_paths: retrievalPackage?.graphPaths ?? [],
+              sources: retrievalPackage?.sources ?? [],
+              conflicts: retrievalPackage?.conflicts ?? [],
+              retrieval_summary: retrievalPackage
+                ? {
+                    duration_ms: retrievalPackage.retrievalMetadata.durationMs,
+                    methods_used: retrievalPackage.retrievalMetadata.methodsUsed,
+                    candidate_count: retrievalPackage.retrievalMetadata.totalCandidatesFound,
+                    query_type: retrievalPackage.queryAnalysis.queryType,
+                    has_sufficient_knowledge: retrievalPackage.hasSufficientKnowledge,
+                  }
+                : null,
+              references,
               usage: tokenUsage,
-            },
+            } as unknown as Json),
           })
           .select("id")
           .single();
@@ -280,6 +340,15 @@ export class AIGateway {
       content: assistantContent,
       status: "completed",
       brain_context_used: hasBrainContext,
+      grounding_state:
+        claimLedgerResult?.groundingState ??
+        (hasBrainContext ? "STRONGLY_GROUNDED" : "GENERAL_KNOWLEDGE_USED"),
+      answer_mode: answerMode,
+      retrieval_run_id: retrievalPackage?.retrievalRunId,
+      claim_ledger: claimLedgerResult?.answerClaims,
+      graph_paths: retrievalPackage?.graphPaths,
+      sources: retrievalPackage?.sources,
+      conflicts_detected: retrievalPackage?.conflicts,
       references,
       metadata: {
         model: responseModel,

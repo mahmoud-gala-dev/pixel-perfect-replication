@@ -19,7 +19,8 @@ export class MockBrainProvider extends BaseAIProvider {
       responseText = "Hello! I am the conversational interface for your Knowledge Brain. You can ask me questions about your stored concepts, relationships, and claims, or explore new topics.";
     } else if (hasBrainContext) {
       // Grounded response using retrieved Brain context
-      const contextSnippet = systemPrompt.split("STRUCTURED BRAIN CONTEXT (READ-ONLY):")[1]?.split("=======================================================")[0]?.trim() ?? "";
+      const match = systemPrompt.match(/STRUCTURED BRAIN CONTEXT \(READ-ONLY\)[^:]*:\s*([\s\S]*?)={20,}/i);
+      const contextSnippet = match ? match[1]?.trim() ?? "" : "";
       
       responseText = `Based on the verified knowledge currently recorded in your Knowledge Brain:\n\n${contextSnippet}\n\nThis information represents the active canonical record in your knowledge graph.`;
     } else {

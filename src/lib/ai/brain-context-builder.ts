@@ -9,6 +9,7 @@ import type {
   BrainContextRelation,
   BrainContextPayload,
 } from "./types";
+import type { RetrievalResultPackage } from "./rag/types";
 
 export interface BuildContextOptions {
   maxNodes?: number;
@@ -32,6 +33,138 @@ export interface FormattedBrainContext {
 }
 
 export class BrainContextBuilder {
+  /**
+   * Formats a complete Phase 9 RetrievalResultPackage into compact, grounded LLM prompt context.
+   */
+  static buildContextFromPackage(pkg: RetrievalResultPackage): FormattedBrainContext {
+    const nodes: BrainContextNode[] = (pkg.nodes || []).map((n: any) => ({
+      id: n.id,
+      name: n.canonical_name || n.name,
+      node_type: n.node_type || "concept",
+      status: n.status || "active",
+      description: n.description || null,
+      summary: null,
+    }));
+
+    const claims: BrainContextClaim[] = (pkg.claims || []).map((c: any) => ({
+      id: c.id,
+      node_id: c.node_id || null,
+      statement: c.statement,
+      claim_type: c.claim_type,
+      status: c.is_outdated ? "outdated" : c.is_conflicted ? "conflicted" : "active",
+      verification: c.verification || "verified",
+      confidence: c.confidence ?? null,
+      knowledge_state: c.knowledge_state,
+      is_conflicted: Boolean(c.is_conflicted),
+      is_outdated: Boolean(c.is_outdated),
+      valid_from: c.valid_from,
+      valid_until: c.valid_until,
+      source: c.sources?.[0] ? { id: c.sources[0].id, title: c.sources[0].title } : null,
+    }));
+
+    const relations: BrainContextRelation[] = (pkg.relations || []).map((r: any) => {
+      const srcName = pkg.nodes.find((n: any) => n.id === r.source_node_id)?.name || "Source";
+      const tgtName = pkg.nodes.find((n: any) => n.id === r.target_node_id)?.name || "Target";
+      return {
+        id: r.id,
+        relation_type: r.relation_type,
+        status: r.status || "active",
+        confidence: r.confidence,
+        source: { id: r.source_node_id, name: srcName },
+        target: { id: r.target_node_id, name: tgtName },
+      };
+    });
+
+    const parts: string[] = [];
+
+    // 1. Entities
+    if (nodes.length > 0) {
+      parts.push("CANONICAL TOPICS & ENTITIES:");
+      for (const n of nodes) {
+        const desc = n.description ? ` - ${n.description}` : "";
+        parts.push(`• [${n.node_type.toUpperCase()}] ${n.name} (Status: ${n.status})${desc}`);
+      }
+    }
+
+    // 2. Graph Paths
+    if (pkg.graphPaths && pkg.graphPaths.length > 0) {
+      parts.push("\nRELEVANT GRAPH PATHS:");
+      for (const p of pkg.graphPaths) {
+        const pathStr = p.nodes.map((n: any, i: number) => {
+          const rel = p.relations[i] ? ` --(${p.relations[i]})--> ` : "";
+          return `${n.name}${rel}`;
+        }).join("");
+        parts.push(`• ${pathStr} [path length: ${p.length}]`);
+      }
+    }
+
+    // 3. Semantic Graph Relations
+    if (relations.length > 0) {
+      parts.push("\nSEMANTIC GRAPH RELATIONS:");
+      for (const r of relations) {
+        const conf = r.confidence != null ? ` [confidence: ${(r.confidence * 100).toFixed(0)}%]` : "";
+        parts.push(`• ${r.source.name} --(${r.relation_type})--> ${r.target.name}${conf}`);
+      }
+    }
+
+    // 4. Grounded Atomic Claims with Citation Tokens
+    if (claims.length > 0) {
+      parts.push("\nGROUNDED ATOMIC CLAIMS:");
+      for (let i = 0; i < claims.length; i++) {
+        const c = claims[i]!;
+        const token = `[C${i + 1}]`;
+        const isConflicted = c.is_conflicted || c.knowledge_state === "conflicted";
+        const isOutdated = c.is_outdated || c.knowledge_state === "outdated";
+        const isSuperseded = c.knowledge_state === "superseded";
+
+        let warning = "";
+        if (isConflicted) {
+          warning = " [WARNING: CONFLICTED KNOWLEDGE - DO NOT PRESENT AS SETTLED FACT]";
+        } else if (isOutdated) {
+          warning = " [WARNING: OUTDATED KNOWLEDGE - VALIDITY EXPIRED]";
+        } else if (isSuperseded) {
+          warning = " [WARNING: SUPERSEDED KNOWLEDGE]";
+        }
+
+        const verif = ` [Status: ${c.verification || c.status}]`;
+        const rawClaim = pkg.claims[i];
+        const srcTitle = rawClaim?.sources?.[0]?.title ? ` (Source: ${rawClaim.sources[0].title})` : "";
+        parts.push(`• ${token} "${c.statement}" (${c.claim_type})${verif}${srcTitle}${warning}`);
+
+        if (rawClaim?.supporting_evidence && rawClaim.supporting_evidence.length > 0) {
+          const topEv = rawClaim.supporting_evidence[0];
+          const loc = topEv.locator || topEv.source_location ? ` (loc: ${topEv.locator || topEv.source_location})` : "";
+          const excerpt = topEv.excerpt ? ` - "${topEv.excerpt}"` : "";
+          parts.push(`    ↳ Supporting Evidence: [Strength: ${topEv.strength ?? 1.0}]${excerpt}${loc}`);
+        }
+
+        if (rawClaim?.counter_evidence && rawClaim.counter_evidence.length > 0) {
+          const topCounter = rawClaim.counter_evidence[0];
+          const excerpt = topCounter.excerpt ? ` - "${topCounter.excerpt}"` : "";
+          parts.push(`    ↳ Counter-Evidence: [DISPUTED]${excerpt}`);
+        }
+      }
+    }
+
+    // 5. Sources
+    if (pkg.sources && pkg.sources.length > 0) {
+      parts.push("\nINDEXED SOURCES:");
+      for (let i = 0; i < pkg.sources.length; i++) {
+        const s = pkg.sources[i]!;
+        const quality = s.source_quality ? ` [${s.source_quality}]` : "";
+        const avail = s.availability === "broken" || s.availability === "unavailable" ? ` [STATUS: ${s.availability.toUpperCase()}]` : "";
+        parts.push(`• [S${i + 1}] "${s.title}"${quality}${avail}`);
+      }
+    }
+
+    const formattedText = parts.join("\n");
+    return {
+      formattedText,
+      hasContext: Boolean(nodes.length > 0 || claims.length > 0),
+      references: { nodes, claims, relations },
+    };
+  }
+
   /**
    * Retrieves relevant Brain concepts read-only and formats a compact context string.
    * STRICTLY READ-ONLY: Never writes to knowledge_nodes, edges, or claims.

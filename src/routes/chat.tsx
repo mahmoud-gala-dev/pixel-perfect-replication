@@ -26,6 +26,8 @@ import {
   X,
   Trash2,
   Paperclip,
+  HelpCircle,
+  AlertTriangle,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
@@ -55,12 +57,15 @@ import { cn } from "@/lib/utils";
 import { ChatMessageMarkdown } from "@/components/chat/ChatMessageMarkdown";
 import { BrainContextInspector } from "@/components/chat/BrainContextInspector";
 import { KnowledgeActivityDrawer } from "@/components/chat/KnowledgeActivityDrawer";
+import { WhyThisAnswerModal } from "@/components/chat/WhyThisAnswerModal";
+import { RetrievalInspectorModal } from "@/components/chat/RetrievalInspectorModal";
 import {
   ChatService,
   KnowledgeExtractionService,
   KnowledgeResolutionService,
   type ChatResponseContract,
 } from "@/lib/ai";
+import type { AnswerMode, GroundingState } from "@/lib/ai/rag";
 import { KnowledgeEngine } from "@/lib/ai/learning";
 import { BrainUpdateSummaryModal } from "@/components/knowledge/BrainUpdateSummaryModal";
 
@@ -94,6 +99,12 @@ export function ChatPage() {
   // Inspector modal state
   const [inspectModalOpen, setInspectModalOpen] = useState(false);
   const [inspectReferences, setInspectReferences] = useState<ChatResponseContract["references"] | null>(null);
+
+  // Phase 9: RAG Answer Mode & Attribution Modals
+  const [answerMode, setAnswerMode] = useState<AnswerMode>("BRAIN_PREFERRED");
+  const [whyModalOpen, setWhyModalOpen] = useState(false);
+  const [inspectorModalOpen, setInspectorModalOpen] = useState(false);
+  const [selectedResponse, setSelectedResponse] = useState<ChatResponseContract | null>(null);
 
   // Knowledge Activity drawer state
   const [knowledgeActivityOpen, setKnowledgeActivityOpen] = useState(false);
@@ -203,6 +214,7 @@ export function ChatPage() {
             idempotency_key: idempotencyKey,
             is_retry: isRetry,
             retry_user_message_id: retryMsgId,
+            answer_mode: answerMode,
           },
         });
         return { response, targetConvId };
@@ -679,6 +691,19 @@ export function ChatPage() {
                 </Label>
               </div>
 
+              {useBrainContext && (
+                <select
+                  value={answerMode}
+                  onChange={(e) => setAnswerMode(e.target.value as AnswerMode)}
+                  className="h-7 rounded border border-border bg-background px-2 text-xs font-sans text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  title="RAG Answer Strategy"
+                >
+                  <option value="BRAIN_PREFERRED">Brain-Preferred</option>
+                  <option value="BRAIN_ONLY">Brain-Only (Strict)</option>
+                  <option value="GENERAL_AI">General AI</option>
+                </select>
+              )}
+
               <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
@@ -728,157 +753,247 @@ export function ChatPage() {
                 </div>
               </div>
             ) : (
-              messages.map((message) => {
-                const isUser = message.role === "user";
-                const meta = (message.metadata ?? {}) as Record<string, unknown>;
-                const brainContextUsed = Boolean(meta["brain_context_used"]);
-                const isFailed = meta["status"] === "failed";
-                const references = meta["references"] as ChatResponseContract["references"] | undefined;
+              (() => {
+                const makeResponseContract = (
+                  msg: (typeof messages)[0],
+                  meta: Record<string, unknown>,
+                  references?: ChatResponseContract["references"],
+                ): ChatResponseContract => {
+                  return {
+                    message_id: msg.id,
+                    conversation_id: msg.conversation_id,
+                    content: msg.content,
+                    status: meta["status"] === "failed" ? "failed" : "completed",
+                    brain_context_used: Boolean(meta["brain_context_used"]),
+                    grounding_state: meta["grounding_state"] as GroundingState | undefined,
+                    answer_mode: meta["answer_mode"] as AnswerMode | undefined,
+                    retrieval_run_id: (meta["retrieval_run_id"] as string) || undefined,
+                    claim_ledger: (meta["claim_ledger"] as any[]) || [],
+                    graph_paths: (meta["graph_paths"] as any[]) || [],
+                    sources: (meta["sources"] as any[]) || [],
+                    conflicts_detected: (meta["conflicts"] as any[]) || [],
+                    references: references || undefined,
+                    metadata: {
+                      model: msg.model || undefined,
+                      provider: (meta["provider"] as string) || undefined,
+                      latency_ms: (meta["latency_ms"] as number) || undefined,
+                      retrieval_summary: meta["retrieval_summary"] as any,
+                    },
+                  };
+                };
 
-                return (
-                  <div
-                    key={message.id}
-                    className={cn("group/msg flex gap-3 max-w-3xl", isUser ? "ml-auto justify-end" : "mr-auto justify-start")}
-                  >
-                    {!isUser && (
-                      <div className="flex size-8 shrink-0 select-none items-center justify-center rounded-lg bg-primary/15 text-primary border border-primary/20">
-                        <Bot className="size-4" />
-                      </div>
-                    )}
+                return messages.map((message) => {
+                  const isUser = message.role === "user";
+                  const meta = (message.metadata ?? {}) as Record<string, unknown>;
+                  const brainContextUsed = Boolean(meta["brain_context_used"]);
+                  const isFailed = meta["status"] === "failed";
+                  const references = meta["references"] as ChatResponseContract["references"] | undefined;
+                  const groundingState = (meta["grounding_state"] as GroundingState) || (brainContextUsed ? "STRONGLY_GROUNDED" : undefined);
+                  const conflicts = (meta["conflicts"] as any[]) || [];
+                  const hasConflicts = conflicts.length > 0 || groundingState === "CONFLICTED_KNOWLEDGE";
 
-                    <div className={cn("space-y-1.5 max-w-[85%] sm:max-w-[78%]", isUser && "text-right")}>
-                      <div className="flex items-center gap-2 px-1 text-[11px] text-muted-foreground">
-                        <span className="font-semibold">{isUser ? "You" : "Knowledge Assistant"}</span>
-                        <span>•</span>
-                        <span className="font-mono">
-                          {new Date(message.created_at).toLocaleTimeString(undefined, {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                        {!isUser && brainContextUsed && (
-                          <button
-                            onClick={() => {
-                              setInspectReferences(references ?? null);
-                              setInspectModalOpen(true);
-                            }}
-                            className="inline-flex items-center gap-1 rounded bg-primary/15 text-primary hover:bg-primary/25 px-1.5 py-0.5 font-medium transition-colors"
-                          >
-                            <Sparkles className="size-3" />
-                            <span>Brain Context Used</span>
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Message Content Bubble */}
-                      <div
-                        className={cn(
-                          "rounded-2xl px-4 py-3 text-sm shadow-sm",
-                          isUser
-                            ? "bg-primary text-primary-foreground rounded-tr-xs"
-                            : isFailed
-                              ? "bg-destructive/10 border border-destructive/30 text-destructive rounded-tl-xs"
-                              : "bg-muted/50 border border-border text-foreground rounded-tl-xs",
-                        )}
-                      >
-                        {isUser ? (
-                          <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
-                        ) : (
-                          <ChatMessageMarkdown content={message.content} />
-                        )}
-                      </div>
-
-                      {/* Attached Sources Reference */}
-                      {!isUser && brainContextUsed && references?.claims && (
-                        (() => {
-                          const sourceTitles = Array.from(
-                            new Set(
-                              references.claims
-                                .map((c) => c.source?.title)
-                                .filter((t): t is string => Boolean(t)),
-                            ),
-                          );
-                          if (sourceTitles.length === 0) return null;
-                          return (
-                            <div className="flex flex-wrap items-center gap-1.5 pt-0.5 px-1 text-[11px] text-muted-foreground">
-                              <span className="font-semibold text-[10px] uppercase tracking-wider text-muted-foreground/80">Sources:</span>
-                              {sourceTitles.map((title, idx) => (
-                                <Badge
-                                  key={idx}
-                                  variant="outline"
-                                  className="text-[10px] py-0 px-1.5 h-4 font-normal cursor-pointer hover:bg-accent transition-colors"
-                                  onClick={() => {
-                                    setInspectReferences(references ?? null);
-                                    setInspectModalOpen(true);
-                                  }}
-                                >
-                                  {title}
-                                </Badge>
-                              ))}
-                            </div>
-                          );
-                        })()
-                      )}
-
-                      {/* Footer Actions: Retry or Regenerate */}
-                      {!isUser && isFailed && (
-                        <div className="flex items-center gap-2 pt-1 text-xs">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-6 text-xs gap-1 border-destructive/40 text-destructive hover:bg-destructive/10"
-                            onClick={() => {
-                              // Find previous user message
-                              const prevUser = [...messages]
-                                .reverse()
-                                .find((m) => m.role === "user");
-                              if (prevUser) {
-                                sendMessageMutation.mutate({
-                                  messageText: prevUser.content,
-                                  isRetry: true,
-                                  retryMsgId: prevUser.id,
-                                });
-                              }
-                            }}
-                          >
-                            <RotateCcw className="size-3" /> Retry Generation
-                          </Button>
+                  return (
+                    <div
+                      key={message.id}
+                      className={cn("group/msg flex gap-3 max-w-3xl", isUser ? "ml-auto justify-end" : "mr-auto justify-start")}
+                    >
+                      {!isUser && (
+                        <div className="flex size-8 shrink-0 select-none items-center justify-center rounded-lg bg-primary/15 text-primary border border-primary/20">
+                          <Bot className="size-4" />
                         </div>
                       )}
 
-                      {!isUser && !isFailed && (
-                        <div className="flex items-center gap-2 pt-0.5 px-1 text-xs opacity-0 group-hover/msg:opacity-100 transition-opacity">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-5 text-[10px] px-1.5 gap-1 text-muted-foreground hover:text-foreground"
-                            onClick={() => {
-                              const prevUser = [...messages]
-                                .reverse()
-                                .find((m) => m.role === "user");
-                              if (prevUser) {
-                                sendMessageMutation.mutate({
-                                  messageText: prevUser.content,
-                                  isRetry: true,
-                                  retryMsgId: prevUser.id,
-                                });
-                              }
-                            }}
-                          >
-                            <RotateCcw className="size-2.5" /> Regenerate
-                          </Button>
+                      <div className={cn("space-y-1.5 max-w-[85%] sm:max-w-[78%]", isUser && "text-right")}>
+                        <div className="flex items-center gap-2 px-1 text-[11px] text-muted-foreground flex-wrap">
+                          <span className="font-semibold">{isUser ? "You" : "Knowledge Assistant"}</span>
+                          <span>•</span>
+                          <span className="font-mono">
+                            {new Date(message.created_at).toLocaleTimeString(undefined, {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                          {!isUser && brainContextUsed && groundingState && (
+                            <button
+                              onClick={() => {
+                                setSelectedResponse(makeResponseContract(message, meta, references));
+                                setWhyModalOpen(true);
+                              }}
+                              className={cn(
+                                "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors cursor-pointer border",
+                                groundingState === "STRONGLY_GROUNDED" && "bg-emerald-500/10 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/20 dark:text-emerald-400",
+                                groundingState === "PARTIALLY_GROUNDED" && "bg-blue-500/10 text-blue-600 border-blue-500/30 hover:bg-blue-500/20 dark:text-blue-400",
+                                groundingState === "CONFLICTED_KNOWLEDGE" && "bg-amber-500/10 text-amber-600 border-amber-500/30 hover:bg-amber-500/20 dark:text-amber-400",
+                                groundingState === "INSUFFICIENT_BRAIN_KNOWLEDGE" && "bg-zinc-500/10 text-zinc-600 border-zinc-500/30 hover:bg-zinc-500/20 dark:text-zinc-400",
+                                groundingState === "GENERAL_KNOWLEDGE_USED" && "bg-purple-500/10 text-purple-600 border-purple-500/30 hover:bg-purple-500/20 dark:text-purple-400",
+                              )}
+                              title="Click to view structured attribution"
+                            >
+                              {groundingState === "STRONGLY_GROUNDED" && <Check className="size-2.5" />}
+                              {groundingState === "PARTIALLY_GROUNDED" && <Sparkles className="size-2.5" />}
+                              {groundingState === "CONFLICTED_KNOWLEDGE" && <AlertTriangle className="size-2.5" />}
+                              {groundingState === "INSUFFICIENT_BRAIN_KNOWLEDGE" && <HelpCircle className="size-2.5" />}
+                              {groundingState === "GENERAL_KNOWLEDGE_USED" && <Bot className="size-2.5" />}
+                              <span>
+                                {groundingState === "STRONGLY_GROUNDED"
+                                  ? "Brain Grounded"
+                                  : groundingState === "PARTIALLY_GROUNDED"
+                                    ? "Partially Grounded"
+                                    : groundingState === "CONFLICTED_KNOWLEDGE"
+                                      ? "Conflicted Knowledge"
+                                      : groundingState === "INSUFFICIENT_BRAIN_KNOWLEDGE"
+                                        ? "Brain Insufficient"
+                                        : "General AI"}
+                              </span>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Message Content Bubble */}
+                        <div
+                          className={cn(
+                            "rounded-2xl px-4 py-3 text-sm shadow-sm",
+                            isUser
+                              ? "bg-primary text-primary-foreground rounded-tr-xs"
+                              : isFailed
+                                ? "bg-destructive/10 border border-destructive/30 text-destructive rounded-tl-xs"
+                                : "bg-muted/50 border border-border text-foreground rounded-tl-xs",
+                          )}
+                        >
+                          {isUser ? (
+                            <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                          ) : (
+                            <ChatMessageMarkdown content={message.content} />
+                          )}
+                        </div>
+
+                        {/* Unresolved Conflict Banner */}
+                        {!isUser && hasConflicts && (
+                          <div className="flex items-center gap-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs mt-1">
+                            <AlertTriangle className="size-3.5 shrink-0 text-amber-600" />
+                            <span>Knowledge contains unresolved disagreement. Inspect claims in &quot;Why this answer?&quot;.</span>
+                          </div>
+                        )}
+
+                        {/* Attached Sources Reference */}
+                        {!isUser && brainContextUsed && references?.claims && (
+                          (() => {
+                            const sourceTitles = Array.from(
+                              new Set(
+                                references.claims
+                                  .map((c) => c.source?.title)
+                                  .filter((t): t is string => Boolean(t)),
+                              ),
+                            );
+                            if (sourceTitles.length === 0) return null;
+                            return (
+                              <div className="flex flex-wrap items-center gap-1.5 pt-0.5 px-1 text-[11px] text-muted-foreground">
+                                <span className="font-semibold text-[10px] uppercase tracking-wider text-muted-foreground/80">Sources:</span>
+                                {sourceTitles.map((title, idx) => (
+                                  <Badge
+                                    key={idx}
+                                    variant="outline"
+                                    className="text-[10px] py-0 px-1.5 h-4 font-normal cursor-pointer hover:bg-accent transition-colors"
+                                    onClick={() => {
+                                      setSelectedResponse(makeResponseContract(message, meta, references));
+                                      setWhyModalOpen(true);
+                                    }}
+                                  >
+                                    {title}
+                                  </Badge>
+                                ))}
+                              </div>
+                            );
+                          })()
+                        )}
+
+                        {/* Footer Actions: Retry, Why this answer, Retrieval trace, Regenerate */}
+                        {!isUser && isFailed && (
+                          <div className="flex items-center gap-2 pt-1 text-xs">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 text-xs gap-1 border-destructive/40 text-destructive hover:bg-destructive/10"
+                              onClick={() => {
+                                const prevUser = [...messages]
+                                  .reverse()
+                                  .find((m) => m.role === "user");
+                                if (prevUser) {
+                                  sendMessageMutation.mutate({
+                                    messageText: prevUser.content,
+                                    isRetry: true,
+                                    retryMsgId: prevUser.id,
+                                  });
+                                }
+                              }}
+                            >
+                              <RotateCcw className="size-3" /> Retry Generation
+                            </Button>
+                          </div>
+                        )}
+
+                        {!isUser && !isFailed && (
+                          <div className="flex items-center gap-3 pt-1 px-1 text-xs">
+                            {brainContextUsed && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setSelectedResponse(makeResponseContract(message, meta, references));
+                                    setWhyModalOpen(true);
+                                  }}
+                                  className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline cursor-pointer"
+                                >
+                                  <Brain className="size-3" />
+                                  <span>Why this answer?</span>
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    setSelectedResponse(makeResponseContract(message, meta, references));
+                                    setInspectorModalOpen(true);
+                                  }}
+                                  className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground cursor-pointer"
+                                >
+                                  <Sliders className="size-3" />
+                                  <span>Trace & Inspector</span>
+                                </button>
+                              </>
+                            )}
+
+                            <div className="opacity-0 group-hover/msg:opacity-100 transition-opacity ml-auto">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-5 text-[10px] px-1.5 gap-1 text-muted-foreground hover:text-foreground"
+                                onClick={() => {
+                                  const prevUser = [...messages]
+                                    .reverse()
+                                    .find((m) => m.role === "user");
+                                  if (prevUser) {
+                                    sendMessageMutation.mutate({
+                                      messageText: prevUser.content,
+                                      isRetry: true,
+                                      retryMsgId: prevUser.id,
+                                    });
+                                  }
+                                }}
+                              >
+                                <RotateCcw className="size-2.5" /> Regenerate
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {isUser && (
+                        <div className="flex size-8 shrink-0 select-none items-center justify-center rounded-lg bg-secondary text-secondary-foreground border border-border">
+                          <User className="size-4" />
                         </div>
                       )}
                     </div>
-
-                    {isUser && (
-                      <div className="flex size-8 shrink-0 select-none items-center justify-center rounded-lg bg-secondary text-secondary-foreground border border-border">
-                        <User className="size-4" />
-                      </div>
-                    )}
-                  </div>
-                );
-              })
+                  );
+                });
+              })()
             )}
 
             {/* Generating Indicator */}
@@ -960,6 +1075,24 @@ export function ChatPage() {
         open={inspectModalOpen}
         onOpenChange={setInspectModalOpen}
         references={inspectReferences}
+      />
+
+      {/* Why This Answer Modal (Phase 9 Structured Attribution) */}
+      <WhyThisAnswerModal
+        open={whyModalOpen}
+        onOpenChange={setWhyModalOpen}
+        response={selectedResponse}
+        onNavigateToNode={(_nodeId) => {
+          setWhyModalOpen(false);
+          window.location.href = "/knowledge";
+        }}
+      />
+
+      {/* Retrieval Inspector Modal (Phase 9 Trace & Multi-Signal Inspector) */}
+      <RetrievalInspectorModal
+        open={inspectorModalOpen}
+        onOpenChange={setInspectorModalOpen}
+        response={selectedResponse}
       />
 
       {/* Knowledge Activity Drawer */}
