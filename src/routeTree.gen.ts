@@ -14,6 +14,7 @@ import { Route as ActivityRouteImport } from './routes/activity'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as GraphRouteImport } from './routes/graph'
+import { Route as KnowledgeRouteImport } from './routes/knowledge'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SourcesRouteImport } from './routes/sources'
 
@@ -42,6 +43,11 @@ const GraphRoute = GraphRouteImport.update({
   path: '/graph',
   getParentRoute: () => rootRouteImport,
 } as any)
+const KnowledgeRoute = KnowledgeRouteImport.update({
+  id: '/knowledge',
+  path: '/knowledge',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
   '/graph': typeof GraphRoute
+  '/knowledge': typeof KnowledgeRoute
   '/settings': typeof SettingsRoute
   '/sources': typeof SourcesRoute
 }
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
   '/graph': typeof GraphRoute
+  '/knowledge': typeof KnowledgeRoute
   '/settings': typeof SettingsRoute
   '/sources': typeof SourcesRoute
 }
@@ -78,16 +86,31 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
   '/graph': typeof GraphRoute
+  '/knowledge': typeof KnowledgeRoute
   '/settings': typeof SettingsRoute
   '/sources': typeof SourcesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/activity' | '/auth' | '/chat' | '/graph' | '/settings' | '/sources'
+    | '/'
+    | '/activity'
+    | '/auth'
+    | '/chat'
+    | '/graph'
+    | '/knowledge'
+    | '/settings'
+    | '/sources'
   fileRoutesByTo: FileRoutesByTo
   to:
-    '/' | '/activity' | '/auth' | '/chat' | '/graph' | '/settings' | '/sources'
+    | '/'
+    | '/activity'
+    | '/auth'
+    | '/chat'
+    | '/graph'
+    | '/knowledge'
+    | '/settings'
+    | '/sources'
   id:
     | '__root__'
     | '/'
@@ -95,6 +118,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/chat'
     | '/graph'
+    | '/knowledge'
     | '/settings'
     | '/sources'
   fileRoutesById: FileRoutesById
@@ -105,6 +129,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ChatRoute: typeof ChatRoute
   GraphRoute: typeof GraphRoute
+  KnowledgeRoute: typeof KnowledgeRoute
   SettingsRoute: typeof SettingsRoute
   SourcesRoute: typeof SourcesRoute
 }
@@ -146,6 +171,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GraphRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/knowledge': {
+      id: '/knowledge'
+      path: '/knowledge'
+      fullPath: '/knowledge'
+      preLoaderRoute: typeof KnowledgeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -169,6 +201,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ChatRoute: ChatRoute,
   GraphRoute: GraphRoute,
+  KnowledgeRoute: KnowledgeRoute,
   SettingsRoute: SettingsRoute,
   SourcesRoute: SourcesRoute,
 }
