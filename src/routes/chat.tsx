@@ -86,9 +86,8 @@ function ChatPage() {
       if (error) throw error;
       await supabase
         .from("conversations")
-        .update({ title: content.slice(0, 60), updated_at: new Date().toISOString() })
-        .eq("id", activeId)
-        .is("title", null);
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", activeId);
     },
     onSuccess: () => {
       setDraft("");
