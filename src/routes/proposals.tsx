@@ -55,6 +55,9 @@ import {
   type ProposalStatus,
   type ProposalType,
 } from "@/lib/ai";
+import { KnowledgeEngine, type KnowledgePlan } from "@/lib/ai/learning";
+import { KnowledgeDiffViewer } from "@/components/knowledge/KnowledgeDiffViewer";
+import { BrainUpdateSummaryModal } from "@/components/knowledge/BrainUpdateSummaryModal";
 
 export const Route = createFileRoute("/proposals")({
   head: () => ({
@@ -232,6 +235,99 @@ export function KnowledgeProposalsPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  // Phase 7: Top-level Navigation Mode
+  const [mainView, setMainView] = useState<"candidates" | "plans" | "quarantine">("candidates");
+  const [committedSummary, setCommittedSummary] = useState<any>(null);
+  const [summaryModalOpen, setSummaryModalOpen] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+
+  // Fetch Knowledge Plans (Phase 7)
+  const { data: plans = [], isLoading: loadingPlans } = useQuery({
+    queryKey: ["knowledge-plans"],
+    enabled: !!session,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("knowledge_plans")
+        .select("*, knowledge_operations(*)")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  // Generate Plan Mutation
+  const generatePlanMutation = useMutation({
+    mutationFn: async () => {
+      const engine = new KnowledgeEngine(supabase);
+      const runIds = Array.from(
+        new Set(proposals.map((p) => p.extraction_run_id).filter(Boolean)),
+      ) as string[];
+      if (runIds.length === 0) {
+        throw new Error("No extraction runs found to generate a plan from.");
+      }
+      const results = [];
+      for (const rId of runIds) {
+        const plan = await engine.planExtractionRun(rId);
+        results.push(plan);
+      }
+      return results;
+    },
+    onSuccess: (created) => {
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-plans"] });
+      setMainView("plans");
+      toast.success(`Generated ${created.length} Knowledge Plan(s)!`, {
+        description: "Inspect the Knowledge Diff and approve for controlled commit.",
+      });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // Approve & Commit Plan Mutation
+  const approveAndCommitPlanMutation = useMutation({
+    mutationFn: async (planId: string) => {
+      const engine = new KnowledgeEngine(supabase);
+      await engine.approvePlan(planId);
+      return await engine.commitPlan(planId);
+    },
+    onSuccess: (res) => {
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-plans"] });
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-transactions"] });
+      void queryClient.invalidateQueries({ queryKey: ["operations"] });
+      void queryClient.invalidateQueries({ queryKey: ["canonical-nodes-lookup"] });
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-proposals"] });
+      setCommittedSummary(res.summary);
+      setSummaryModalOpen(true);
+      toast.success("Knowledge Plan committed to Canonical Brain!");
+    },
+    onError: (err: Error) => toast.error(`Commit error: ${err.message}`),
+  });
+
+  // Reject Plan Mutation
+  const rejectPlanMutation = useMutation({
+    mutationFn: async (planId: string) => {
+      const engine = new KnowledgeEngine(supabase);
+      await engine.rejectPlan(planId);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-plans"] });
+      toast.info("Knowledge Plan rejected.");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // Quarantine Plan Mutation
+  const quarantinePlanMutation = useMutation({
+    mutationFn: async (planId: string) => {
+      const engine = new KnowledgeEngine(supabase);
+      await engine.quarantinePlan(planId);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-plans"] });
+      toast.warning("Knowledge Plan quarantined for safety.");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   // Resolution Metric Counts
   const resolutionList = Object.values(resolutionResults) as any[];
   const existingCount = resolutionList.filter((r) => r.status === "EXISTING").length;
@@ -242,21 +338,83 @@ export function KnowledgeProposalsPage() {
 
   return (
     <AppShell
-      title="Knowledge Proposals & Entity Resolution"
-      description="Resolve AI-extracted concepts against Canonical Brain. SEARCH BEFORE CREATE strictly enforced."
+      title="Knowledge Proposals & Controlled Learning"
+      description="Review candidates, inspect Before vs After diffs, and execute controlled commits."
     >
       <div className="space-y-6">
-        {/* Metric Cards Banner */}
-        <div className="grid gap-3 sm:grid-cols-4">
-          <div className="rounded-xl border border-border bg-card p-4">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Total Proposals
-            </span>
-            <div className="mt-1 flex items-baseline justify-between">
-              <span className="text-2xl font-bold font-mono">{proposals.length}</span>
-              <Sparkles className="size-4 text-primary" />
-            </div>
+        {/* Top-level Phase 5 / 6 / 7 Mode Selector */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant={mainView === "candidates" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setMainView("candidates")}
+              className="gap-2 text-xs font-semibold"
+            >
+              <Sparkles className="size-3.5 text-primary" />
+              <span>Candidates & Resolution</span>
+              <Badge variant="outline" className="text-[10px] font-mono">
+                {proposals.length}
+              </Badge>
+            </Button>
+
+            <Button
+              variant={mainView === "plans" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setMainView("plans")}
+              className="gap-2 text-xs font-semibold"
+            >
+              <GitCompare className="size-3.5 text-purple-400" />
+              <span>Knowledge Plans & Diff (Phase 7)</span>
+              <Badge variant="outline" className="text-[10px] font-mono">
+                {plans.length}
+              </Badge>
+              {plans.some((p: any) => p.status === "needs_review") && (
+                <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
+              )}
+            </Button>
+
+            <Button
+              variant={mainView === "quarantine" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setMainView("quarantine")}
+              className="gap-2 text-xs font-semibold"
+            >
+              <AlertTriangle className="size-3.5 text-rose-400" />
+              <span>Quarantine</span>
+              <Badge variant="outline" className="text-[10px] font-mono">
+                {proposals.filter((p) => p.status === "quarantined").length}
+              </Badge>
+            </Button>
           </div>
+
+          {mainView === "plans" && (
+            <Button
+              size="sm"
+              onClick={() => generatePlanMutation.mutate()}
+              disabled={generatePlanMutation.isPending || proposals.length === 0}
+              className="gap-1.5 text-xs"
+            >
+              <Sparkles className="size-3.5" />
+              {generatePlanMutation.isPending ? "Generating Plan…" : "Generate Plan from Resolved Candidates"}
+            </Button>
+          )}
+        </div>
+
+        {/* VIEW 1: CANDIDATES & RESOLUTION (PHASES 5-6) */}
+        {mainView === "candidates" && (
+          <div className="space-y-6">
+            {/* Metric Cards Banner */}
+            <div className="grid gap-3 sm:grid-cols-4">
+              <div className="rounded-xl border border-border bg-card p-4">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Total Proposals
+                </span>
+                <div className="mt-1 flex items-baseline justify-between">
+                  <span className="text-2xl font-bold font-mono">{proposals.length}</span>
+                  <Sparkles className="size-4 text-primary" />
+                </div>
+              </div>
 
           <div className="rounded-xl border border-border bg-card p-4">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -403,6 +561,211 @@ export function KnowledgeProposalsPage() {
           </div>
         )}
       </div>
+    )}
+
+    {/* VIEW 2: KNOWLEDGE PLANS & DIFF (PHASE 7 REVIEW QUEUE) */}
+    {mainView === "plans" && (
+      <div className="space-y-4">
+        {plans.length === 0 ? (
+          <EmptyState
+            icon={GitCompare}
+            title="No Knowledge Plans Yet"
+            description="Click 'Generate Plan from Resolved Candidates' to create an inspectable Knowledge Plan with Before vs After diffs and controlled commit."
+          />
+        ) : (
+          <div className="space-y-4">
+            {plans.map((plan: any) => {
+              const summary = plan.summary as any;
+              const isCommitted = plan.status === "committed";
+              const isNeedsReview = plan.status === "needs_review";
+              const isExpanded = selectedPlanId === plan.id;
+              const operations = (plan.knowledge_operations || []) as any[];
+
+              return (
+                <div key={plan.id} className="rounded-xl border border-border bg-card p-4 space-y-4">
+                  {/* Plan Header */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-foreground">
+                          Plan #{plan.id.slice(0, 10)}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px] font-mono",
+                            plan.status === "committed" && "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+                            plan.status === "needs_review" && "border-amber-500/40 bg-amber-500/10 text-amber-400",
+                            plan.status === "ready" && "border-blue-500/40 bg-blue-500/10 text-blue-400",
+                            plan.status === "quarantined" && "border-rose-500/40 bg-rose-500/10 text-rose-400",
+                          )}
+                        >
+                          {plan.status.toUpperCase()}
+                        </Badge>
+                        <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground">
+                          MODE: {plan.learning_mode.toUpperCase()}
+                        </Badge>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px] font-mono",
+                            plan.risk_level === "LOW" && "border-emerald-500/30 text-emerald-400",
+                            plan.risk_level === "MEDIUM" && "border-amber-500/30 text-amber-400",
+                            plan.risk_level === "HIGH" && "border-rose-500/30 text-rose-400",
+                          )}
+                        >
+                          {plan.risk_level} RISK
+                        </Badge>
+                      </div>
+                      <span className="text-[11px] text-muted-foreground font-mono">
+                        Confidence: {Math.round(plan.overall_confidence * 100)}% • Version {plan.plan_version} • {operations.length} operations
+                      </span>
+                    </div>
+
+                    {/* Plan Actions */}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedPlanId(isExpanded ? null : plan.id)}
+                        className="h-8 text-xs text-muted-foreground"
+                      >
+                        {isExpanded ? "Hide Diff" : "Inspect Diff"}
+                      </Button>
+
+                      {!isCommitted && plan.status !== "quarantined" && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => quarantinePlanMutation.mutate(plan.id)}
+                            disabled={quarantinePlanMutation.isPending}
+                            className="h-8 text-xs text-amber-500 border-amber-500/30 hover:bg-amber-500/10"
+                          >
+                            Quarantine
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => rejectPlanMutation.mutate(plan.id)}
+                            disabled={rejectPlanMutation.isPending}
+                            className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                          >
+                            Reject
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => approveAndCommitPlanMutation.mutate(plan.id)}
+                            disabled={approveAndCommitPlanMutation.isPending}
+                            className="h-8 text-xs gap-1.5"
+                          >
+                            <CheckCircle2 className="size-3.5" />
+                            {approveAndCommitPlanMutation.isPending ? "Committing…" : "Approve & Commit"}
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Summary Chips */}
+                  {summary && (
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      {summary.reused_nodes > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded bg-blue-500/10 px-2 py-0.5 text-[11px] text-blue-400 border border-blue-500/20">
+                          <Brain className="size-3" /> Reused {summary.reused_nodes}
+                        </span>
+                      )}
+                      {summary.created_nodes > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-400 border border-emerald-500/20">
+                          <Layers className="size-3" /> +{summary.created_nodes} nodes
+                        </span>
+                      )}
+                      {summary.created_relations > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded bg-purple-500/10 px-2 py-0.5 text-[11px] text-purple-400 border border-purple-500/20">
+                          <GitCompare className="size-3" /> +{summary.created_relations} relations
+                        </span>
+                      )}
+                      {summary.added_claims > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-400 border border-amber-500/20">
+                          <Sparkles className="size-3" /> +{summary.added_claims} claims
+                        </span>
+                      )}
+                      {summary.no_ops > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                          <ShieldCheck className="size-3" /> {summary.no_ops} skipped (no-op)
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Knowledge Diff Viewer */}
+                  {(isExpanded || isNeedsReview) && (
+                    <KnowledgeDiffViewer
+                      diff={plan.diff_summary}
+                      operations={operations}
+                      riskLevel={plan.risk_level}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    )}
+
+    {/* VIEW 3: QUARANTINED KNOWLEDGE */}
+    {mainView === "quarantine" && (
+      <div className="space-y-4">
+        {proposals.filter((p) => p.status === "quarantined").length === 0 ? (
+          <EmptyState
+            icon={AlertTriangle}
+            title="Quarantine Clean"
+            description="No unverified claims, conflicting knowledge, or weak-provenance items currently quarantined."
+          />
+        ) : (
+          <div className="grid gap-4">
+            {proposals
+              .filter((p) => p.status === "quarantined")
+              .map((p) => (
+                <div key={p.id} className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline" className="border-rose-500/40 text-rose-400 text-xs font-mono">
+                      QUARANTINED {p.proposal_type}
+                    </Badge>
+                    <span className="text-[11px] text-muted-foreground font-mono">
+                      ID: {p.id.slice(0, 8)}…
+                    </span>
+                  </div>
+                  <p className="text-sm font-medium text-foreground">
+                    {String(p.payload["statement"] || p.payload["name"] || "Unspecified candidate")}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Quarantined to protect canonical Brain integrity: pending external evidence or conflict review.
+                  </p>
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => approveMutation.mutate(p.id)}
+                      className="h-7 text-xs"
+                    >
+                      Verify & Move to Candidates
+                    </Button>
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+    )}
+
+    <BrainUpdateSummaryModal
+      open={summaryModalOpen}
+      onOpenChange={setSummaryModalOpen}
+      summary={committedSummary}
+    />
+  </div>
 
       {/* Reject Confirmation Dialog */}
       <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>

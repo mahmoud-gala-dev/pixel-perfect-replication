@@ -55,7 +55,14 @@ import { cn } from "@/lib/utils";
 import { ChatMessageMarkdown } from "@/components/chat/ChatMessageMarkdown";
 import { BrainContextInspector } from "@/components/chat/BrainContextInspector";
 import { KnowledgeActivityDrawer } from "@/components/chat/KnowledgeActivityDrawer";
-import { ChatService, KnowledgeExtractionService, type ChatResponseContract } from "@/lib/ai";
+import {
+  ChatService,
+  KnowledgeExtractionService,
+  KnowledgeResolutionService,
+  type ChatResponseContract,
+} from "@/lib/ai";
+import { KnowledgeEngine } from "@/lib/ai/learning";
+import { BrainUpdateSummaryModal } from "@/components/knowledge/BrainUpdateSummaryModal";
 
 export const Route = createFileRoute("/chat")({
   head: () => ({
@@ -290,6 +297,80 @@ export function ChatPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  // Phase 7: Controlled Automatic Learning Pipeline
+  const [learningStatus, setLearningStatus] = useState<
+    "idle" | "analyzing" | "detected" | "resolving" | "planning" | "needs_review" | "brain_updated" | "no_new_knowledge" | "failed"
+  >("idle");
+  const [learnedSummary, setLearnedSummary] = useState<any>(null);
+  const [summaryModalOpen, setSummaryModalOpen] = useState(false);
+
+  const learnThisMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeId) return null;
+      setLearningStatus("analyzing");
+
+      // Step 1: Extract
+      const extractionResult = await KnowledgeExtractionService.extractFromConversation(activeId);
+      if (
+        !extractionResult ||
+        extractionResult.relevance === "CONVERSATIONAL_ONLY" ||
+        extractionResult.relevance === "USER_PREFERENCE"
+      ) {
+        setLearningStatus("no_new_knowledge");
+        return { status: "no_new_knowledge" };
+      }
+
+      setLearningStatus("resolving");
+      // Step 2: Resolve entities against existing Brain
+      const resolutionService = new KnowledgeResolutionService(supabase);
+      await resolutionService.resolveExtractionRun(extractionResult.extraction_run_id);
+
+      setLearningStatus("planning");
+      // Step 3: Knowledge Engine Diff & Plan
+      const engine = new KnowledgeEngine(supabase);
+      const plan = await engine.planExtractionRun(extractionResult.extraction_run_id, activeId);
+
+      // Step 4: Check if auto-commit or needs review
+      if (plan.status === "needs_review") {
+        setLearningStatus("needs_review");
+        return { status: "needs_review", plan };
+      } else {
+        // Safe auto-commit permitted under current policy
+        await engine.approvePlan(plan.id);
+        const commitRes = await engine.commitPlan(plan.id);
+        setLearningStatus("brain_updated");
+        setLearnedSummary(commitRes.summary);
+        setSummaryModalOpen(true);
+        return { status: "committed", commitRes };
+      }
+    },
+    onSuccess: (res) => {
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-proposals", activeId] });
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-proposals"] });
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-plans"] });
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-transactions"] });
+      void queryClient.invalidateQueries({ queryKey: ["operations"] });
+      void queryClient.invalidateQueries({ queryKey: ["canonical-nodes-lookup"] });
+
+      if (!res) return;
+      if (res.status === "no_new_knowledge") {
+        toast.info("No factual canonical knowledge detected in this dialogue.");
+      } else if (res.status === "needs_review") {
+        toast.info("Knowledge Plan created: awaiting review in Proposals Queue.", {
+          description: "High-confidence / high-risk operations queued for approval.",
+        });
+      } else if (res.status === "committed") {
+        toast.success("Brain Updated Successfully!", {
+          description: "Controlled automatic learning executed through Knowledge Engine.",
+        });
+      }
+    },
+    onError: (err: Error) => {
+      setLearningStatus("failed");
+      toast.error(`Learning failed: ${err.message}`);
+    },
+  });
+
   // Handle Send submission
   const handleSend = () => {
     const text = draft.trim();
@@ -315,6 +396,63 @@ export function ChatPage() {
       description="Conversational intelligence with read-only Knowledge Brain grounding."
       actions={
         <div className="flex items-center gap-2">
+          {/* Subtle learning indicator in chat */}
+          {learningStatus !== "idle" && (
+            <div className="flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs">
+              {learningStatus === "analyzing" && (
+                <>
+                  <Sparkles className="size-3 animate-spin text-primary" />
+                  <span className="text-[11px] text-muted-foreground">Analyzing…</span>
+                </>
+              )}
+              {learningStatus === "resolving" && (
+                <>
+                  <RotateCcw className="size-3 animate-spin text-blue-400" />
+                  <span className="text-[11px] text-muted-foreground">Resolving…</span>
+                </>
+              )}
+              {learningStatus === "planning" && (
+                <>
+                  <Brain className="size-3 animate-pulse text-purple-400" />
+                  <span className="text-[11px] text-muted-foreground">Planning…</span>
+                </>
+              )}
+              {learningStatus === "needs_review" && (
+                <span className="text-[11px] text-amber-400 font-medium">
+                  Needs Review (Queued)
+                </span>
+              )}
+              {learningStatus === "brain_updated" && (
+                <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
+                  <Check className="size-3" /> Brain Updated
+                </span>
+              )}
+              {learningStatus === "no_new_knowledge" && (
+                <span className="text-[11px] text-muted-foreground">
+                  No New Knowledge
+                </span>
+              )}
+              {learningStatus === "failed" && (
+                <span className="text-[11px] text-rose-400">
+                  Learning Failed
+                </span>
+              )}
+            </div>
+          )}
+
+          {activeId && messages.length > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => learnThisMutation.mutate()}
+              disabled={learnThisMutation.isPending || isGenerating}
+              className="gap-1.5 text-xs border-primary/30 text-primary hover:bg-primary/10"
+            >
+              <Sparkles className="size-3.5" />
+              {learnThisMutation.isPending ? "Learning…" : "Learn This"}
+            </Button>
+          )}
+
           <Button
             size="sm"
             onClick={() => {
@@ -865,6 +1003,13 @@ export function ChatPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Brain Update Summary Modal */}
+      <BrainUpdateSummaryModal
+        open={summaryModalOpen}
+        onOpenChange={setSummaryModalOpen}
+        summary={learnedSummary}
+      />
     </AppShell>
   );
 }

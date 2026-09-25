@@ -32,6 +32,7 @@ export type ProposalStatus =
   | "approved"
   | "rejected"
   | "committed"
+  | "quarantined"
   | "failed";
 
 export type ValidationStatus = "unvalidated" | "valid" | "invalid" | "warning";

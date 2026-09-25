@@ -566,51 +566,87 @@ export type Database = {
       }
       knowledge_operations: {
         Row: {
+          approved_by: string | null
           confidence: number | null
           conversation_id: string | null
           created_at: string
+          diff: Json | null
           error: string | null
           executed_at: string | null
           id: string
           message_id: string | null
           operation_type: string
           payload: Json
+          plan_id: string | null
+          previous_state: Json | null
+          proposal_id: string | null
+          proposed_state: Json | null
           reason: string | null
+          reason_summary: string | null
           requested_by: string
           result: Json | null
+          risk_level: string | null
           status: Database["public"]["Enums"]["operation_status"]
+          target_id: string | null
+          target_type: string | null
+          transaction_id: string | null
+          trust_tier: string | null
           updated_at: string
         }
         Insert: {
+          approved_by?: string | null
           confidence?: number | null
           conversation_id?: string | null
           created_at?: string
+          diff?: Json | null
           error?: string | null
           executed_at?: string | null
           id?: string
           message_id?: string | null
           operation_type: string
           payload?: Json
+          plan_id?: string | null
+          previous_state?: Json | null
+          proposal_id?: string | null
+          proposed_state?: Json | null
           reason?: string | null
+          reason_summary?: string | null
           requested_by?: string
           result?: Json | null
+          risk_level?: string | null
           status?: Database["public"]["Enums"]["operation_status"]
+          target_id?: string | null
+          target_type?: string | null
+          transaction_id?: string | null
+          trust_tier?: string | null
           updated_at?: string
         }
         Update: {
+          approved_by?: string | null
           confidence?: number | null
           conversation_id?: string | null
           created_at?: string
+          diff?: Json | null
           error?: string | null
           executed_at?: string | null
           id?: string
           message_id?: string | null
           operation_type?: string
           payload?: Json
+          plan_id?: string | null
+          previous_state?: Json | null
+          proposal_id?: string | null
+          proposed_state?: Json | null
           reason?: string | null
+          reason_summary?: string | null
           requested_by?: string
           result?: Json | null
+          risk_level?: string | null
           status?: Database["public"]["Enums"]["operation_status"]
+          target_id?: string | null
+          target_type?: string | null
+          transaction_id?: string | null
+          trust_tier?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -993,6 +1029,180 @@ export type Database = {
           },
         ]
       }
+      knowledge_plans: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          committed_at: string | null
+          conversation_id: string | null
+          created_at: string
+          created_by: string
+          diff_summary: Json
+          extraction_run_id: string | null
+          id: string
+          learning_mode: string
+          metadata: Json
+          overall_confidence: number | null
+          plan_version: number
+          risk_level: string
+          status: string
+          summary: Json
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          committed_at?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          created_by?: string
+          diff_summary?: Json
+          extraction_run_id?: string | null
+          id?: string
+          learning_mode?: string
+          metadata?: Json
+          overall_confidence?: number | null
+          plan_version?: number
+          risk_level?: string
+          status?: string
+          summary?: Json
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          committed_at?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          created_by?: string
+          diff_summary?: Json
+          extraction_run_id?: string | null
+          id?: string
+          learning_mode?: string
+          metadata?: Json
+          overall_confidence?: number | null
+          plan_version?: number
+          risk_level?: string
+          status?: string
+          summary?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_plans_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_plans_extraction_run_id_fkey"
+            columns: ["extraction_run_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_extraction_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_transactions: {
+        Row: {
+          approved_by: string | null
+          completed_at: string | null
+          conversation_id: string | null
+          id: string
+          initiated_by: string
+          metadata: Json
+          operation_count: number
+          plan_id: string
+          started_at: string
+          status: string
+          summary: Json
+        }
+        Insert: {
+          approved_by?: string | null
+          completed_at?: string | null
+          conversation_id?: string | null
+          id?: string
+          initiated_by?: string
+          metadata?: Json
+          operation_count?: number
+          plan_id: string
+          started_at?: string
+          status?: string
+          summary?: Json
+        }
+        Update: {
+          approved_by?: string | null
+          completed_at?: string | null
+          conversation_id?: string | null
+          id?: string
+          initiated_by?: string
+          metadata?: Json
+          operation_count?: number
+          plan_id?: string
+          started_at?: string
+          status?: string
+          summary?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_transactions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_transactions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_settings: {
+        Row: {
+          auto_add_aliases: boolean
+          auto_add_claims: boolean
+          auto_add_relations: boolean
+          auto_create_nodes: boolean
+          learning_mode: string
+          min_claim_confidence: number
+          min_node_confidence: number
+          min_relation_confidence: number
+          require_evidence_for_claims: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auto_add_aliases?: boolean
+          auto_add_claims?: boolean
+          auto_add_relations?: boolean
+          auto_create_nodes?: boolean
+          learning_mode?: string
+          min_claim_confidence?: number
+          min_node_confidence?: number
+          min_relation_confidence?: number
+          require_evidence_for_claims?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          auto_add_aliases?: boolean
+          auto_add_claims?: boolean
+          auto_add_relations?: boolean
+          auto_create_nodes?: boolean
+          learning_mode?: string
+          min_claim_confidence?: number
+          min_node_confidence?: number
+          min_relation_confidence?: number
+          require_evidence_for_claims?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       knowledge_versions: {
         Row: {
           created_at: string
@@ -1189,6 +1399,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      commit_knowledge_plan: {
+        Args: {
+          p_plan_id: string
+          p_approved_operation_ids?: string[] | null
+        }
+        Returns: Json
+      }
       archive_conversation: {
         Args: { p_conversation_id: string }
         Returns: Json

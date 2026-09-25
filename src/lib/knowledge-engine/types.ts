@@ -134,6 +134,7 @@ export type RelationTypeRow = Tables<"relation_types">;
 export type SourceRow = Tables<"sources">;
 export type EvidenceRow = Tables<"evidence">;
 export type KnowledgeClaimRow = Tables<"knowledge_claims">;
+export type KnowledgeClaim = KnowledgeClaimRow;
 
 export const CLAIM_TYPES = [
   "fact",
