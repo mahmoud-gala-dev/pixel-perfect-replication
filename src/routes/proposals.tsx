@@ -25,8 +25,14 @@ import {
   Filter,
   Check,
   RotateCcw,
+  GitCompare,
+  Layers,
+  ShieldCheck,
+  CheckCheck,
+  Compass,
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { AppShell, EmptyState } from "@/components/AppShell";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -44,6 +50,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   KnowledgeExtractionService,
+  KnowledgeResolutionService,
   type KnowledgeProposalItem,
   type ProposalStatus,
   type ProposalType,
@@ -94,6 +101,79 @@ export function KnowledgeProposalsPage() {
         search: searchQuery,
       });
     },
+  });
+
+  // Fetch Resolution Results
+  const { data: resolutionResults = {} } = useQuery({
+    queryKey: ["knowledge-resolution-results"],
+    enabled: !!session,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("knowledge_resolution_results")
+        .select("*, knowledge_resolution_candidates(*)");
+      if (error || !data) return {};
+      const map: Record<string, any> = {};
+      for (const item of data) {
+        map[item.proposal_id] = item;
+      }
+      return map;
+    },
+  });
+
+  // Fetch Canonical Nodes for Label Resolution
+  const { data: canonicalNodes = [] } = useQuery({
+    queryKey: ["canonical-nodes-lookup"],
+    enabled: !!session,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("knowledge_nodes")
+        .select("id, name, slug, node_type")
+        .is("deleted_at", null);
+      return data || [];
+    },
+  });
+
+  // Batch Resolve Mutation
+  const batchResolveMutation = useMutation({
+    mutationFn: async () => {
+      const resolutionService = new KnowledgeResolutionService(supabase);
+      const runIds = Array.from(
+        new Set(proposals.map((p) => p.extraction_run_id).filter(Boolean)),
+      ) as string[];
+
+      let count = 0;
+      for (const rId of runIds) {
+        const summary = await resolutionService.resolveExtractionRun(rId);
+        count += summary.resolved_existing + summary.new_candidates + summary.possible_duplicates;
+      }
+      return count;
+    },
+    onSuccess: (count) => {
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-proposals"] });
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-resolution-results"] });
+      toast.success(`Entity resolution complete for ${count} candidates.`, {
+        description: "Search before create enforced: canonical brain unmodified.",
+      });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // Manual Resolution Override Mutation
+  const manualResolutionMutation = useMutation({
+    mutationFn: async (params: {
+      proposalId: string;
+      action: "USE_EXISTING" | "TREAT_AS_NEW" | "MARK_AMBIGUOUS" | "REJECT";
+      canonicalNodeId?: string | null | undefined;
+    }) => {
+      const resolutionService = new KnowledgeResolutionService(supabase);
+      await resolutionService.recordManualResolution(params);
+    },
+    onSuccess: (_, vars) => {
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-proposals"] });
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-resolution-results"] });
+      toast.success(`Resolution override recorded (${vars.action}). Canonical brain untouched.`);
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 
   // Approve Mutation (Approved for Resolution; NOT canonical commit)
@@ -152,15 +232,18 @@ export function KnowledgeProposalsPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // Counts
-  const pendingCount = proposals.filter((p) => p.status === "pending").length;
-  const approvedCount = proposals.filter((p) => p.status === "approved").length;
-  const rejectedCount = proposals.filter((p) => p.status === "rejected").length;
+  // Resolution Metric Counts
+  const resolutionList = Object.values(resolutionResults) as any[];
+  const existingCount = resolutionList.filter((r) => r.status === "EXISTING").length;
+  const newCount = resolutionList.filter((r) => r.status === "NEW").length;
+  const reviewNeededCount = resolutionList.filter(
+    (r) => r.status === "POSSIBLE_DUPLICATE" || r.status === "AMBIGUOUS",
+  ).length;
 
   return (
     <AppShell
-      title="Knowledge Proposals"
-      description="Candidate entities, atomic claims, and relations extracted from conversations awaiting Phase 6 resolution."
+      title="Knowledge Proposals & Entity Resolution"
+      description="Resolve AI-extracted concepts against Canonical Brain. SEARCH BEFORE CREATE strictly enforced."
     >
       <div className="space-y-6">
         {/* Metric Cards Banner */}
@@ -177,31 +260,31 @@ export function KnowledgeProposalsPage() {
 
           <div className="rounded-xl border border-border bg-card p-4">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Pending Review
+              Resolved Existing (Reused)
             </span>
             <div className="mt-1 flex items-baseline justify-between">
-              <span className="text-2xl font-bold font-mono text-amber-500">{pendingCount}</span>
-              <Clock className="size-4 text-amber-500" />
+              <span className="text-2xl font-bold font-mono text-emerald-500">{existingCount}</span>
+              <CheckCheck className="size-4 text-emerald-500" />
             </div>
           </div>
 
           <div className="rounded-xl border border-border bg-card p-4">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Approved for Resolution
+              New Candidates
             </span>
             <div className="mt-1 flex items-baseline justify-between">
-              <span className="text-2xl font-bold font-mono text-emerald-500">{approvedCount}</span>
-              <CheckCircle2 className="size-4 text-emerald-500" />
+              <span className="text-2xl font-bold font-mono text-blue-500">{newCount}</span>
+              <Layers className="size-4 text-blue-500" />
             </div>
           </div>
 
           <div className="rounded-xl border border-border bg-card p-4">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Rejected
+              Duplicates / Review
             </span>
             <div className="mt-1 flex items-baseline justify-between">
-              <span className="text-2xl font-bold font-mono text-muted-foreground">{rejectedCount}</span>
-              <XCircle className="size-4 text-muted-foreground" />
+              <span className="text-2xl font-bold font-mono text-amber-500">{reviewNeededCount}</span>
+              <AlertTriangle className="size-4 text-amber-500" />
             </div>
           </div>
         </div>
@@ -228,8 +311,19 @@ export function KnowledgeProposalsPage() {
             ))}
           </div>
 
-          {/* Type Filter & Search */}
+          {/* Action & Search */}
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="default"
+              onClick={() => batchResolveMutation.mutate()}
+              disabled={batchResolveMutation.isPending || proposals.length === 0}
+              className="h-8 text-xs gap-1.5 font-medium"
+            >
+              <GitCompare className="size-3.5" />
+              {batchResolveMutation.isPending ? "Resolving…" : "Run Resolution Engine"}
+            </Button>
+
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value as ProposalType | "all")}
@@ -274,6 +368,15 @@ export function KnowledgeProposalsPage() {
               <ProposalCard
                 key={proposal.id}
                 proposal={proposal}
+                resolution={resolutionResults[proposal.id]}
+                canonicalNodes={canonicalNodes}
+                onManualResolve={(action, cId) =>
+                  manualResolutionMutation.mutate({
+                    proposalId: proposal.id,
+                    action,
+                    canonicalNodeId: cId ?? null,
+                  })
+                }
                 onApprove={() => approveMutation.mutate(proposal.id)}
                 onReject={() => {
                   setRejectProposalId(proposal.id);
@@ -410,13 +513,47 @@ export function KnowledgeProposalsPage() {
 // PROPOSAL CARD COMPONENT
 // ---------------------------------------------------------------------
 
+interface ResolutionCandidateData {
+  id: string;
+  candidate_node_id: string;
+  rank: number;
+  exact_score: number;
+  alias_score: number;
+  text_score: number;
+  semantic_score: number;
+  type_score: number;
+  hierarchy_score: number;
+  graph_score: number;
+  combined_score: number;
+  signals?: Record<string, unknown> | null;
+}
+
+interface ResolutionResultData {
+  id: string;
+  proposal_id: string;
+  status: string;
+  canonical_node_id: string | null;
+  resolution_confidence: number;
+  extraction_confidence: number | null;
+  match_type: string;
+  reason_summary: string | null;
+  manual_override: boolean;
+  knowledge_resolution_candidates?: ResolutionCandidateData[];
+}
+
 function ProposalCard({
   proposal,
+  resolution,
+  canonicalNodes,
+  onManualResolve,
   onApprove,
   onReject,
   onEdit,
 }: {
   proposal: KnowledgeProposalItem;
+  resolution?: ResolutionResultData;
+  canonicalNodes?: Array<{ id: string; name: string; slug: string; node_type: string }>;
+  onManualResolve?: (action: "USE_EXISTING" | "TREAT_AS_NEW" | "MARK_AMBIGUOUS", candidateNodeId?: string) => void;
   onApprove: () => void;
   onReject: () => void;
   onEdit: () => void;
@@ -638,6 +775,111 @@ function ProposalCard({
             Edited by user • Original extraction preserved in audit logs
           </div>
         )}
+
+        {/* Phase 6 Resolution Analysis Block */}
+        {resolution ? (
+          <div className="mt-3 rounded-lg border border-border/80 bg-card/60 p-3 space-y-2.5 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-muted-foreground uppercase text-[10px] tracking-wider flex items-center gap-1">
+                  <GitCompare className="size-3 text-primary" /> Entity Resolution:
+                </span>
+                {resolution.status === "EXISTING" ? (
+                  <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 gap-1 text-[11px]">
+                    <CheckCheck className="size-3" /> Existing Canonical Match
+                  </Badge>
+                ) : resolution.status === "POSSIBLE_DUPLICATE" ? (
+                  <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 gap-1 text-[11px]">
+                    <AlertTriangle className="size-3" /> Possible Duplicate (Needs Review)
+                  </Badge>
+                ) : resolution.status === "AMBIGUOUS" ? (
+                  <Badge className="bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/30 gap-1 text-[11px]">
+                    <Compass className="size-3" /> Ambiguous Identity
+                  </Badge>
+                ) : resolution.status === "NEW" ? (
+                  <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30 gap-1 text-[11px]">
+                    <Sparkles className="size-3" /> Genuinely New Entity
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[11px]">
+                    Unresolved
+                  </Badge>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-mono">
+                <span>Signal: <strong className="text-foreground">{resolution.match_type}</strong></span>
+                <span>•</span>
+                <span>Resolution Conf: <strong className="text-foreground">{Math.round(resolution.resolution_confidence * 100)}%</strong></span>
+              </div>
+            </div>
+
+            {resolution.reason_summary && (
+              <p className="text-[11px] text-muted-foreground">
+                {resolution.reason_summary}
+              </p>
+            )}
+
+            {/* Candidate Rankings */}
+            {resolution.knowledge_resolution_candidates && resolution.knowledge_resolution_candidates.length > 0 && (
+              <div className="pt-2 border-t border-border/40 space-y-2">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Ranked Canonical Candidates:
+                </span>
+                <div className="space-y-1.5">
+                  {resolution.knowledge_resolution_candidates.slice(0, 3).map((cand) => {
+                    const matchedNode = canonicalNodes?.find((n) => n.id === cand.candidate_node_id);
+                    const candName = matchedNode?.name || `Node ${cand.candidate_node_id.slice(0, 8)}`;
+                    return (
+                      <div
+                        key={cand.id}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-md border border-border/50 bg-background/60 text-xs"
+                      >
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1.5 font-medium">
+                            <span className="text-muted-foreground font-mono">#{cand.rank}</span>
+                            <span className="text-foreground font-semibold">{candName}</span>
+                            <Badge variant="outline" className="text-[9px] py-0 px-1 font-mono uppercase">
+                              {matchedNode?.node_type || "node"}
+                            </Badge>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground font-mono">
+                            <span>Score: <strong>{Math.round(cand.combined_score * 100)}%</strong></span>
+                            {cand.exact_score > 0 && <span className="text-emerald-500">Exact: 100%</span>}
+                            {cand.alias_score > 0 && <span className="text-blue-500">Alias: {Math.round(cand.alias_score * 100)}%</span>}
+                            {cand.semantic_score > 0 && <span>Semantic: {Math.round(cand.semantic_score * 100)}%</span>}
+                            {cand.graph_score > 0 && <span className="text-purple-500">Graph: {Math.round(cand.graph_score * 100)}%</span>}
+                          </div>
+                        </div>
+
+                        {onManualResolve && (
+                          <div className="flex items-center gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="h-6 text-[11px] px-2"
+                              onClick={() => onManualResolve("USE_EXISTING", cand.candidate_node_id)}
+                            >
+                              Use Existing
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 text-[11px] px-2 text-muted-foreground"
+                              onClick={() => onManualResolve("TREAT_AS_NEW")}
+                            >
+                              Treat as New
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
 
       {/* Footer Actions */}

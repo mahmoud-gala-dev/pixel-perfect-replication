@@ -11,3 +11,4 @@ export * from "./providers/base";
 export * from "./providers/openai-compatible";
 export * from "./providers/mock-brain-provider";
 export * from "./extraction";
+export * from "./resolution";

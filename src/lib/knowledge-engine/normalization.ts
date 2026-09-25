@@ -58,12 +58,12 @@ export function calculateNameSimilarity(str1: string, str2: string): number {
   if (!s1 || !s2) return 0.0;
   if (s1.length === 1 && s2.length === 1) return s1 === s2 ? 1.0 : 0.0;
 
-  // Single word inclusion check (e.g. "Laravel Queue" vs "Laravel Queues")
+  // Substring inclusion check (e.g. "Laravel Queue" vs "Laravel Queues" or "Laravel Framework" vs "Laravel")
   if (s1.includes(s2) || s2.includes(s1)) {
     const minLen = Math.min(s1.length, s2.length);
     const maxLen = Math.max(s1.length, s2.length);
-    if (minLen / maxLen >= 0.75) {
-      return 0.88 + 0.1 * (minLen / maxLen);
+    if (minLen / maxLen >= 0.40) {
+      return Number((0.78 + 0.20 * (minLen / maxLen)).toFixed(3));
     }
   }
 
