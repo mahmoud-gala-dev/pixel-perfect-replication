@@ -54,6 +54,7 @@ export type Database = {
           created_at: string
           created_by: string
           entry_id: string | null
+          evidence_type: string
           excerpt: string | null
           id: string
           locator: string | null
@@ -61,6 +62,7 @@ export type Database = {
           node_id: string | null
           source_id: string
           stance: Database["public"]["Enums"]["verification_status"]
+          strength: number | null
         }
         Insert: {
           claim_id?: string | null
@@ -68,6 +70,7 @@ export type Database = {
           created_at?: string
           created_by?: string
           entry_id?: string | null
+          evidence_type?: string
           excerpt?: string | null
           id?: string
           locator?: string | null
@@ -75,6 +78,7 @@ export type Database = {
           node_id?: string | null
           source_id: string
           stance?: Database["public"]["Enums"]["verification_status"]
+          strength?: number | null
         }
         Update: {
           claim_id?: string | null
@@ -82,6 +86,7 @@ export type Database = {
           created_at?: string
           created_by?: string
           entry_id?: string | null
+          evidence_type?: string
           excerpt?: string | null
           id?: string
           locator?: string | null
@@ -89,6 +94,7 @@ export type Database = {
           node_id?: string | null
           source_id?: string
           stance?: Database["public"]["Enums"]["verification_status"]
+          strength?: number | null
         }
         Relationships: [
           {
@@ -234,6 +240,7 @@ export type Database = {
       knowledge_claims: {
         Row: {
           claim_text: string
+          claim_type: string
           confidence: number | null
           created_at: string
           created_by: string
@@ -241,6 +248,7 @@ export type Database = {
           id: string
           metadata: Json
           node_id: string | null
+          normalized_statement: string | null
           source_id: string | null
           status: Database["public"]["Enums"]["knowledge_status"]
           updated_at: string
@@ -248,6 +256,7 @@ export type Database = {
         }
         Insert: {
           claim_text: string
+          claim_type?: string
           confidence?: number | null
           created_at?: string
           created_by?: string
@@ -255,6 +264,7 @@ export type Database = {
           id?: string
           metadata?: Json
           node_id?: string | null
+          normalized_statement?: string | null
           source_id?: string | null
           status?: Database["public"]["Enums"]["knowledge_status"]
           updated_at?: string
@@ -262,6 +272,7 @@ export type Database = {
         }
         Update: {
           claim_text?: string
+          claim_type?: string
           confidence?: number | null
           created_at?: string
           created_by?: string
@@ -269,6 +280,7 @@ export type Database = {
           id?: string
           metadata?: Json
           node_id?: string | null
+          normalized_statement?: string | null
           source_id?: string | null
           status?: Database["public"]["Enums"]["knowledge_status"]
           updated_at?: string
@@ -777,8 +789,51 @@ export type Database = {
         }
         Relationships: []
       }
+      relation_types: {
+        Row: {
+          allows_self_relation: boolean
+          created_at: string
+          description: string | null
+          id: string
+          inverse_key: string | null
+          is_symmetric: boolean
+          key: string
+          metadata: Json
+          name: string
+          status: Database["public"]["Enums"]["knowledge_status"]
+          updated_at: string
+        }
+        Insert: {
+          allows_self_relation?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          inverse_key?: string | null
+          is_symmetric?: boolean
+          key: string
+          metadata?: Json
+          name: string
+          status?: Database["public"]["Enums"]["knowledge_status"]
+          updated_at?: string
+        }
+        Update: {
+          allows_self_relation?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          inverse_key?: string | null
+          is_symmetric?: boolean
+          key?: string
+          metadata?: Json
+          name?: string
+          status?: Database["public"]["Enums"]["knowledge_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sources: {
         Row: {
+          accessed_at: string | null
           author: string | null
           created_at: string
           created_by: string
@@ -786,6 +841,7 @@ export type Database = {
           id: string
           metadata: Json
           published_at: string | null
+          publisher: string | null
           reliability: number | null
           source_kind: Database["public"]["Enums"]["source_kind"]
           title: string
@@ -793,6 +849,7 @@ export type Database = {
           url: string | null
         }
         Insert: {
+          accessed_at?: string | null
           author?: string | null
           created_at?: string
           created_by?: string
@@ -800,6 +857,7 @@ export type Database = {
           id?: string
           metadata?: Json
           published_at?: string | null
+          publisher?: string | null
           reliability?: number | null
           source_kind?: Database["public"]["Enums"]["source_kind"]
           title: string
@@ -807,6 +865,7 @@ export type Database = {
           url?: string | null
         }
         Update: {
+          accessed_at?: string | null
           author?: string | null
           created_at?: string
           created_by?: string
@@ -814,6 +873,7 @@ export type Database = {
           id?: string
           metadata?: Json
           published_at?: string | null
+          publisher?: string | null
           reliability?: number | null
           source_kind?: Database["public"]["Enums"]["source_kind"]
           title?: string
@@ -866,29 +926,80 @@ export type Database = {
         Args: {
           p_name: string
           p_node_type?: Database["public"]["Enums"]["node_type"]
-          p_parent_id?: string
+          p_parent_id?: string | null
         }
         Returns: Json
       }
       safe_create_knowledge_node: {
         Args: {
-          p_description?: string
+          p_description?: string | null
           p_force?: boolean
           p_metadata?: Json
           p_name: string
           p_node_type?: Database["public"]["Enums"]["node_type"]
-          p_parent_id?: string
+          p_parent_id?: string | null
+          p_status?: Database["public"]["Enums"]["knowledge_status"]
+          p_summary?: string | null
         }
         Returns: Json
       }
       safe_move_knowledge_node: {
-        Args: { p_new_parent_id: string; p_node_id: string }
+        Args: { p_new_parent_id: string | null; p_node_id: string }
         Returns: Json
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       validate_node_move: {
-        Args: { p_new_parent_id: string; p_node_id: string }
+        Args: { p_new_parent_id: string | null; p_node_id: string }
+        Returns: Json
+      }
+      safe_create_relation: {
+        Args: {
+          p_confidence?: number | null
+          p_description?: string | null
+          p_metadata?: Json
+          p_relation_type: string
+          p_source_node_id: string
+          p_status?: Database["public"]["Enums"]["knowledge_status"]
+          p_target_node_id: string
+        }
+        Returns: Json
+      }
+      get_node_relations: {
+        Args: {
+          p_node_id: string
+        }
+        Returns: Json
+      }
+      get_graph_neighborhood: {
+        Args: {
+          p_depth?: number
+          p_node_id: string
+        }
+        Returns: Json
+      }
+      safe_create_claim: {
+        Args: {
+          p_claim_type?: string
+          p_confidence?: number | null
+          p_metadata?: Json
+          p_node_id?: string | null
+          p_statement: string
+          p_status?: Database["public"]["Enums"]["knowledge_status"]
+        }
+        Returns: Json
+      }
+      safe_attach_evidence: {
+        Args: {
+          p_claim_id: string
+          p_confidence?: number | null
+          p_evidence_type?: string
+          p_excerpt?: string | null
+          p_locator?: string | null
+          p_metadata?: Json
+          p_source_id: string
+          p_stance?: Database["public"]["Enums"]["verification_status"]
+        }
         Returns: Json
       }
     }
@@ -943,6 +1054,9 @@ export type Database = {
         | "contradicted"
         | "verified"
         | "rejected"
+        | "disputed"
+        | "qualifies"
+        | "mentions"
     }
     CompositeTypes: {
       [_ in never]: never

@@ -125,3 +125,174 @@ export interface HierarchyPathItem {
   node_type: NodeType;
   depth: number;
 }
+
+// ============================================================================
+// PHASE 3 TYPES: Relations, Claims, Sources, Evidence & Graph
+// ============================================================================
+
+export type RelationTypeRow = Tables<"relation_types">;
+export type SourceRow = Tables<"sources">;
+export type EvidenceRow = Tables<"evidence">;
+export type KnowledgeClaimRow = Tables<"knowledge_claims">;
+
+export const CLAIM_TYPES = [
+  "fact",
+  "definition",
+  "rule",
+  "observation",
+  "opinion",
+  "interpretation",
+  "historical",
+  "procedural",
+  "technical",
+] as const;
+
+export type ClaimType = (typeof CLAIM_TYPES)[number] | (string & {});
+
+export const EVIDENCE_STANCES = [
+  "supported",
+  "contradicted",
+  "qualifies",
+  "mentions",
+] as const;
+
+export type EvidenceStance = (typeof EVIDENCE_STANCES)[number];
+
+export const EVIDENCE_TYPES = [
+  "direct_quote",
+  "data_point",
+  "benchmark",
+  "reference",
+  "observation",
+  "experiment",
+] as const;
+
+export type EvidenceType = (typeof EVIDENCE_TYPES)[number] | (string & {});
+
+export const SOURCE_KINDS = [
+  "documentation",
+  "website",
+  "book",
+  "pdf",
+  "api",
+  "conversation",
+  "user",
+  "manual",
+  "ai_research",
+] as const;
+
+export type SourceKind = Database["public"]["Enums"]["source_kind"];
+
+export interface RelationTypeDef {
+  key: string;
+  name: string;
+  description: string;
+  inverse_key: string | null;
+  is_symmetric: boolean;
+  allows_self_relation: boolean;
+}
+
+export interface NodeRelationItem {
+  id: string;
+  direction: "outgoing" | "incoming";
+  relation_type: string;
+  relation_name: string;
+  display_relation: string;
+  inverse_key: string | null;
+  is_symmetric: boolean;
+  description: string | null;
+  confidence: number | null;
+  status: KnowledgeStatus;
+  other_node: {
+    id: string;
+    name: string;
+    node_type: string;
+    slug: string;
+  };
+}
+
+export interface NodeRelationsResult {
+  node_id: string;
+  outgoing: NodeRelationItem[];
+  incoming: NodeRelationItem[];
+  total: number;
+}
+
+export interface GraphNode {
+  id: string;
+  name: string;
+  canonical_name: string | null;
+  slug: string;
+  node_type: string;
+  status: KnowledgeStatus;
+  parent_id: string | null;
+  is_center?: boolean | undefined;
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  relation_type: string;
+  description: string | null;
+  confidence: number | null;
+  status: KnowledgeStatus;
+}
+
+export interface GraphNeighborhood {
+  center_node_id: string;
+  depth: number;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export interface SafeCreateRelationInput {
+  source_node_id: string;
+  target_node_id: string;
+  relation_type: string;
+  description?: string | null | undefined;
+  confidence?: number | undefined;
+  status?: KnowledgeStatus | undefined;
+  metadata?: Record<string, unknown> | undefined;
+}
+
+export interface SafeCreateRelationResult {
+  created: boolean;
+  status: "created" | "existing" | "rejected";
+  edge?: KnowledgeEdge | null | undefined;
+  message?: string | undefined;
+}
+
+export interface SafeCreateClaimInput {
+  node_id?: string | null | undefined;
+  statement: string;
+  claim_type?: ClaimType | undefined;
+  confidence?: number | undefined;
+  status?: KnowledgeStatus | undefined;
+  metadata?: Record<string, unknown> | undefined;
+}
+
+export interface SafeCreateClaimResult {
+  created: boolean;
+  claim?: KnowledgeClaimRow | null | undefined;
+  message?: string | undefined;
+}
+
+export interface SafeAttachEvidenceInput {
+  claim_id: string;
+  source_id: string;
+  stance: EvidenceStance;
+  excerpt?: string | null | undefined;
+  locator?: string | null | undefined;
+  evidence_type?: EvidenceType | string | undefined;
+  confidence?: number | undefined;
+  metadata?: Record<string, unknown> | undefined;
+}
+
+export interface SafeAttachEvidenceResult {
+  created: boolean;
+  evidence?: EvidenceRow | null | undefined;
+  claim_verification?: string | undefined;
+  message?: string | undefined;
+}
+

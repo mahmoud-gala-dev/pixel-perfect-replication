@@ -17,6 +17,15 @@ import {
   Home,
   FileText,
   Hash,
+  Quote,
+  Scale,
+  ShieldCheck,
+  HelpCircle,
+  XCircle,
+  ExternalLink,
+  Layers,
+  Search,
+  ArrowLeftRight,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -35,7 +44,18 @@ import {
   NODE_STATUSES,
   NODE_TYPES,
   RELATION_TYPES,
+  DEFAULT_RELATION_TYPES,
+  CLAIM_TYPES,
+  EVIDENCE_STANCES,
+  EVIDENCE_TYPES,
+  SOURCE_KINDS,
+  getRelationTypeDef,
   safeCreateKnowledgeNode,
+  safeCreateRelation,
+  safeCreateClaim,
+  safeAttachEvidence,
+  groupEvidenceByStance,
+  normalizeSourceUrl,
   validateNodeMove,
   type AliasType,
   type KnowledgeAlias,
@@ -45,6 +65,17 @@ import {
   type NodeResolutionResult,
   type NodeType,
   type SafeCreateNodeInput,
+  type ClaimType,
+  type EvidenceStance,
+  type EvidenceType,
+  type SourceKind,
+  type KnowledgeClaimRow,
+  type SourceRow,
+  type EvidenceRow,
+  type NodeRelationItem,
+  type RelationTypeDef,
+  type RelationTypeRow,
+  type KnowledgeStatus,
 } from "@/lib/knowledge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,7 +129,7 @@ function KnowledgePage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [dialog, setDialog] = useState<
-    null | "create" | "edit" | "move" | "alias" | "relation"
+    null | "create" | "edit" | "move" | "alias" | "relation" | "claim" | "inspect-evidence" | "attach-evidence"
   >(null);
 
   // Form states
@@ -119,8 +150,31 @@ function KnowledgePage() {
 
   const [relationForm, setRelationForm] = useState({
     target: NONE as string,
-    type: "related_to",
+    type: "uses",
     description: "",
+    confidence: 1.0,
+  });
+  const [relationSearch, setRelationSearch] = useState("");
+  const [relationsTab, setRelationsTab] = useState<"all" | "outgoing" | "incoming">("all");
+
+  const [claimForm, setClaimForm] = useState({
+    statement: "",
+    claim_type: "fact" as ClaimType,
+    confidence: 1.0,
+  });
+
+  const [selectedClaimForEvidence, setSelectedClaimForEvidence] = useState<KnowledgeClaimRow | null>(null);
+  const [evidenceForm, setEvidenceForm] = useState({
+    stance: "supported" as EvidenceStance,
+    source_id: NONE as string,
+    excerpt: "",
+    locator: "",
+    evidence_type: "direct_quote" as EvidenceType,
+    confidence: 1.0,
+    quickSourceTitle: "",
+    quickSourceUrl: "",
+    quickSourceKind: "documentation" as SourceKind,
+    isCreatingSource: false,
   });
 
   // Duplicate warning modal state (Search-Before-Create Resolution)
@@ -199,6 +253,65 @@ function KnowledgePage() {
     },
   });
 
+  // Fetch relation types (with default fallback)
+  const relationTypesQuery = useQuery({
+    queryKey: ["relation-types"],
+    enabled: !!session,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("relation_types")
+        .select("*")
+        .order("name");
+      if (error || !data || data.length === 0) return DEFAULT_RELATION_TYPES;
+      return data as RelationTypeRow[];
+    },
+  });
+
+  // Fetch claims for selected node
+  const claimsQuery = useQuery({
+    queryKey: ["node-claims", selectedId],
+    enabled: !!selectedId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("knowledge_claims")
+        .select("*")
+        .eq("node_id", selectedId!)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as KnowledgeClaimRow[];
+    },
+  });
+
+  // Fetch all evidence for selected node
+  const allEvidenceQuery = useQuery({
+    queryKey: ["node-evidence", selectedId],
+    enabled: !!selectedId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("evidence")
+        .select("*, source:sources(*)")
+        .eq("node_id", selectedId!)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Array<EvidenceRow & { source: SourceRow | null }>;
+    },
+  });
+
+  // Fetch reusable sources
+  const sourcesQuery = useQuery({
+    queryKey: ["sources"],
+    enabled: !!session,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sources")
+        .select("*")
+        .is("deleted_at", null)
+        .order("title");
+      if (error) throw error;
+      return (data ?? []) as SourceRow[];
+    },
+  });
+
   // Fetch associated cross-category knowledge entries
   const entriesQuery = useQuery({
     queryKey: ["node-entries", selectedId],
@@ -224,12 +337,98 @@ function KnowledgePage() {
     },
   });
 
+  // Compute structured relations with symmetry and inverse keys
+  const nodeRelations = useMemo(() => {
+    if (!selected) return { outgoing: [], incoming: [], total: 0 };
+    const allEdges = edgesQuery.data ?? [];
+    const relationTypes = relationTypesQuery.data ?? DEFAULT_RELATION_TYPES;
+
+    const nodesMap = new Map(allNodes.map((n) => [n.id, n]));
+    const outgoing: NodeRelationItem[] = [];
+    const incoming: NodeRelationItem[] = [];
+
+    for (const edge of allEdges) {
+      if (edge.status === "archived" || edge.status === "deprecated") continue;
+      const relDef = getRelationTypeDef(edge.relation_type, relationTypes);
+
+      if (edge.source_node_id === selected.id) {
+        const targetNode = nodesMap.get(edge.target_node_id);
+        outgoing.push({
+          id: edge.id,
+          direction: "outgoing",
+          relation_type: edge.relation_type,
+          relation_name: relDef.name,
+          display_relation: edge.relation_type,
+          inverse_key: relDef.inverse_key,
+          is_symmetric: relDef.is_symmetric,
+          description: edge.description,
+          confidence: edge.confidence,
+          status: edge.status as KnowledgeStatus,
+          other_node: {
+            id: edge.target_node_id,
+            name: targetNode?.name ?? "Unknown Node",
+            node_type: targetNode?.node_type ?? "concept",
+            slug: targetNode?.slug ?? "",
+          },
+        });
+      }
+
+      if (edge.target_node_id === selected.id) {
+        const sourceNode = nodesMap.get(edge.source_node_id);
+        const displayRel = relDef.is_symmetric
+          ? edge.relation_type
+          : (relDef.inverse_key ?? `inverse_of_${edge.relation_type}`);
+
+        incoming.push({
+          id: edge.id,
+          direction: "incoming",
+          relation_type: edge.relation_type,
+          relation_name: relDef.name,
+          display_relation: displayRel,
+          inverse_key: relDef.inverse_key,
+          is_symmetric: relDef.is_symmetric,
+          description: edge.description,
+          confidence: edge.confidence,
+          status: edge.status as KnowledgeStatus,
+          other_node: {
+            id: edge.source_node_id,
+            name: sourceNode?.name ?? "Unknown Node",
+            node_type: sourceNode?.node_type ?? "concept",
+            slug: sourceNode?.slug ?? "",
+          },
+        });
+      }
+    }
+
+    return { outgoing, incoming, total: outgoing.length + incoming.length };
+  }, [selected, edgesQuery.data, relationTypesQuery.data, allNodes]);
+
+  // Compute claims enriched with their supporting/contradicting evidence counts
+  const claimsWithEvidence = useMemo(() => {
+    const claims = claimsQuery.data ?? [];
+    const allEv = allEvidenceQuery.data ?? [];
+
+    return claims.map((claim) => {
+      const claimEvidences = allEv.filter((e) => e.claim_id === claim.id);
+      const grouped = groupEvidenceByStance(claimEvidences);
+      return {
+        ...claim,
+        evidences: claimEvidences,
+        grouped,
+      };
+    });
+  }, [claimsQuery.data, allEvidenceQuery.data]);
+
   function refreshAll() {
     void queryClient.invalidateQueries({ queryKey: ["nodes"] });
     void queryClient.invalidateQueries({ queryKey: ["aliases", selectedId] });
     void queryClient.invalidateQueries({ queryKey: ["all-aliases"] });
     void queryClient.invalidateQueries({ queryKey: ["node-edges", selectedId] });
     void queryClient.invalidateQueries({ queryKey: ["node-entries", selectedId] });
+    void queryClient.invalidateQueries({ queryKey: ["node-claims", selectedId] });
+    void queryClient.invalidateQueries({ queryKey: ["node-evidence", selectedId] });
+    void queryClient.invalidateQueries({ queryKey: ["sources"] });
+    void queryClient.invalidateQueries({ queryKey: ["relation-types"] });
     void queryClient.invalidateQueries({ queryKey: ["brain-stats"] });
   }
 
@@ -432,21 +631,162 @@ function KnowledgePage() {
     onError: (error: Error) => toast.error(error.message),
   });
 
-  // Add Typed Semantic Relation Mutation
+  // Safe Add Typed Semantic Relation Mutation
   const addRelation = useMutation({
     mutationFn: async () => {
-      if (!selected || relationForm.target === NONE) return;
-      const { error } = await supabase.from("knowledge_edges").insert({
-        source_node_id: selected.id,
-        target_node_id: relationForm.target,
-        relation_type: relationForm.type,
-        description: relationForm.description.trim() || null,
-      });
+      if (!selected || relationForm.target === NONE) {
+        throw new Error("Please select a target knowledge node.");
+      }
+      const res = await safeCreateRelation(
+        supabase,
+        {
+          source_node_id: selected.id,
+          target_node_id: relationForm.target,
+          relation_type: relationForm.type,
+          description: relationForm.description.trim() || null,
+          confidence: Number(relationForm.confidence) || 1.0,
+        },
+        edgesQuery.data ?? [],
+        allNodes,
+        relationTypesQuery.data ?? DEFAULT_RELATION_TYPES,
+      );
+
+      if (!res.created) {
+        throw new Error(res.message ?? "Could not create relation.");
+      }
+      return res;
+    },
+    onSuccess: (res) => {
+      toast.success(res.message ?? "Relation created successfully");
+      setRelationForm({ target: NONE, type: "uses", description: "", confidence: 1.0 });
+      setRelationSearch("");
+      setDialog(null);
+      refreshAll();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  // Archive Relation Mutation
+  const archiveRelation = useMutation({
+    mutationFn: async (edgeId: string) => {
+      const { error } = await supabase
+        .from("knowledge_edges")
+        .update({ status: "archived", updated_at: new Date().toISOString() })
+        .eq("id", edgeId);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Relation created");
-      setRelationForm({ target: NONE, type: "related_to", description: "" });
+      toast.success("Relation archived");
+      refreshAll();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  // Safe Add Atomic Claim Mutation
+  const addClaim = useMutation({
+    mutationFn: async () => {
+      if (!selected) return;
+      const res = await safeCreateClaim(supabase, {
+        node_id: selected.id,
+        statement: claimForm.statement,
+        claim_type: claimForm.claim_type,
+        confidence: Number(claimForm.confidence) || 1.0,
+      });
+
+      if (!res.created) {
+        throw new Error(res.message ?? "Failed to create atomic claim.");
+      }
+      return res;
+    },
+    onSuccess: () => {
+      toast.success("Atomic claim added to knowledge node");
+      setClaimForm({ statement: "", claim_type: "fact", confidence: 1.0 });
+      setDialog(null);
+      refreshAll();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  // Deprecate Claim Mutation
+  const deprecateClaim = useMutation({
+    mutationFn: async (claimId: string) => {
+      const { error } = await supabase
+        .from("knowledge_claims")
+        .update({ status: "deprecated", updated_at: new Date().toISOString() })
+        .eq("id", claimId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Claim deprecated");
+      refreshAll();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  // Safe Attach Evidence Mutation
+  const attachEvidence = useMutation({
+    mutationFn: async () => {
+      if (!selectedClaimForEvidence) {
+        throw new Error("No claim selected for evidence attachment.");
+      }
+
+      let sourceId = evidenceForm.source_id;
+
+      // Handle inline source creation
+      if (evidenceForm.isCreatingSource) {
+        if (!evidenceForm.quickSourceTitle.trim()) {
+          throw new Error("Source title is required.");
+        }
+        const normalizedUrl = normalizeSourceUrl(evidenceForm.quickSourceUrl);
+        const { data: newSource, error: sourceErr } = await supabase
+          .from("sources")
+          .insert({
+            title: evidenceForm.quickSourceTitle.trim(),
+            url: normalizedUrl,
+            source_kind: evidenceForm.quickSourceKind,
+          })
+          .select("id")
+          .single();
+
+        if (sourceErr) throw sourceErr;
+        sourceId = newSource.id;
+      }
+
+      if (sourceId === NONE) {
+        throw new Error("Please select an existing source or create a new one.");
+      }
+
+      const res = await safeAttachEvidence(supabase, {
+        claim_id: selectedClaimForEvidence.id,
+        source_id: sourceId,
+        stance: evidenceForm.stance,
+        excerpt: evidenceForm.excerpt.trim() || null,
+        locator: evidenceForm.locator.trim() || null,
+        evidence_type: evidenceForm.evidence_type,
+        confidence: Number(evidenceForm.confidence) || 1.0,
+      });
+
+      if (!res.created) {
+        throw new Error(res.message ?? "Failed to attach evidence.");
+      }
+      return res;
+    },
+    onSuccess: (res) => {
+      toast.success(
+        `Evidence attached! Claim verification updated to "${res.claim_verification ?? "evaluated"}".`,
+      );
+      setEvidenceForm({
+        stance: "supported",
+        source_id: NONE,
+        excerpt: "",
+        locator: "",
+        evidence_type: "direct_quote",
+        confidence: 1.0,
+        quickSourceTitle: "",
+        quickSourceUrl: "",
+        quickSourceKind: "documentation",
+        isCreatingSource: false,
+      });
       setDialog(null);
       refreshAll();
     },
@@ -681,14 +1021,15 @@ function KnowledgePage() {
                 </dl>
               </div>
 
-              {/* Multi-Section Details Grid */}
-              <div className="grid gap-5 lg:grid-cols-3">
+              {/* Row 1: Children and Aliases (Taxonomy Navigation) */}
+              <div className="grid gap-5 sm:grid-cols-2">
                 {/* 1. Children List */}
                 <div className="panel p-4">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">
-                      Children ({children.length})
-                    </h3>
+                    <div>
+                      <h3 className="text-sm font-semibold">Children ({children.length})</h3>
+                      <p className="text-[11px] text-muted-foreground">Taxonomy hierarchy sub-nodes</p>
+                    </div>
                     <Button size="sm" variant="ghost" onClick={() => openCreate(true)} title="Add child node">
                       <Plus className="size-4" />
                     </Button>
@@ -696,7 +1037,7 @@ function KnowledgePage() {
                   {children.length === 0 ? (
                     <p className="text-xs text-muted-foreground">No child nodes yet.</p>
                   ) : (
-                    <ul className="space-y-1.5 text-sm">
+                    <ul className="space-y-1 text-sm max-h-48 overflow-y-auto pr-1">
                       {children.map((child) => (
                         <li key={child.id}>
                           <button
@@ -721,7 +1062,7 @@ function KnowledgePage() {
                     <div>
                       <h3 className="text-sm font-semibold">Aliases</h3>
                       <p className="text-[11px] text-muted-foreground">
-                        Alternative canonical names
+                        Alternative canonical names & translations
                       </p>
                     </div>
                     <Button size="sm" variant="ghost" onClick={() => setDialog("alias")}>
@@ -734,7 +1075,7 @@ function KnowledgePage() {
                       No aliases yet. Add abbreviations, translations, or alternate names.
                     </p>
                   ) : (
-                    <ul className="flex flex-wrap gap-2">
+                    <ul className="flex flex-wrap gap-2 max-h-48 overflow-y-auto pr-1">
                       {aliasesQuery.data.map((alias) => (
                         <li
                           key={alias.id}
@@ -764,56 +1105,350 @@ function KnowledgePage() {
                     </ul>
                   )}
                 </div>
+              </div>
 
-                {/* 3. Semantic Graph Relations (Knowledge Graph) */}
-                <div className="panel p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-semibold">Semantic Graph</h3>
-                      <p className="text-[11px] text-muted-foreground">
-                        Graph relations (uses, requires…)
-                      </p>
+              {/* Row 2: Semantic Graph Relations (Knowledge Graph) */}
+              <div className="panel p-5">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-border/50 pb-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <GitBranch className="size-4 text-primary" />
+                      <h3 className="text-base font-semibold">Knowledge Graph Relations</h3>
                     </div>
-                    <Button size="sm" variant="ghost" onClick={() => setDialog("relation")}>
-                      <GitBranch className="size-4" />
-                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      Semantic connections across canonical concepts with direction, inverse mappings, and symmetry
+                    </p>
                   </div>
 
-                  {!edgesQuery.data || edgesQuery.data.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No semantic relations yet.</p>
-                  ) : (
-                    <ul className="space-y-2 text-xs">
-                      {edgesQuery.data.map((edge) => {
-                        const outgoing = edge.source_node_id === selected.id;
-                        const otherId = outgoing ? edge.target_node_id : edge.source_node_id;
-                        return (
-                          <li
-                            key={edge.id}
-                            className="flex items-center justify-between rounded bg-secondary/40 p-1.5"
-                          >
-                            <div className="flex items-center gap-1.5 truncate">
-                              <span className="font-mono text-primary text-[11px]">
-                                {outgoing ? "→" : "←"} {edge.relation_type}
+                  <div className="flex items-center gap-2">
+                    {/* Tab pills */}
+                    <div className="flex rounded-md border border-border bg-secondary/40 p-0.5 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setRelationsTab("all")}
+                        className={cn(
+                          "rounded px-2.5 py-1 text-xs font-medium transition-colors",
+                          relationsTab === "all" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        All ({nodeRelations.total})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRelationsTab("outgoing")}
+                        className={cn(
+                          "rounded px-2.5 py-1 text-xs font-medium transition-colors",
+                          relationsTab === "outgoing" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        Outgoing ({nodeRelations.outgoing.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRelationsTab("incoming")}
+                        className={cn(
+                          "rounded px-2.5 py-1 text-xs font-medium transition-colors",
+                          relationsTab === "incoming" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        Incoming ({nodeRelations.incoming.length})
+                      </button>
+                    </div>
+
+                    <Button size="sm" onClick={() => setDialog("relation")}>
+                      <Plus className="size-4" /> Add relation
+                    </Button>
+                  </div>
+                </div>
+
+                {nodeRelations.total === 0 ? (
+                  <p className="py-3 text-xs text-muted-foreground">
+                    No graph relations recorded yet. Connect {selected.name} to related technologies, frameworks, or concepts.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {/* Outgoing relations */}
+                    {(relationsTab === "all" || relationsTab === "outgoing") && nodeRelations.outgoing.length > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Outgoing Relations ({nodeRelations.outgoing.length})
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {nodeRelations.outgoing.map((rel) => (
+                            <div
+                              key={rel.id}
+                              className="group flex items-start justify-between rounded-lg border border-border bg-secondary/30 p-2.5 text-xs transition-colors hover:border-primary/40"
+                            >
+                              <div className="space-y-1 min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="rounded bg-primary/10 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary">
+                                    → {rel.relation_type}
+                                  </span>
+                                  {rel.is_symmetric && (
+                                    <span className="rounded bg-secondary px-1.5 py-0.5 text-[9px] font-mono text-muted-foreground" title="Symmetric relation">
+                                      ↔ symmetric
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedId(rel.other_node.id)}
+                                    className="font-medium text-foreground hover:underline truncate"
+                                  >
+                                    {rel.other_node.name}
+                                  </button>
+                                  <span className="text-[10px] text-muted-foreground font-mono">
+                                    ({rel.other_node.node_type})
+                                  </span>
+                                </div>
+                                {rel.description && (
+                                  <p className="text-[11px] text-muted-foreground line-clamp-2">
+                                    {rel.description}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 ml-2">
+                                {rel.confidence !== null && (
+                                  <span className="font-mono text-[10px] text-muted-foreground" title="Confidence">
+                                    {(rel.confidence * 100).toFixed(0)}%
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => archiveRelation.mutate(rel.id)}
+                                  className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-opacity"
+                                  title="Archive relation"
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Incoming relations */}
+                    {(relationsTab === "all" || relationsTab === "incoming") && nodeRelations.incoming.length > 0 && (
+                      <div className="space-y-1.5 pt-2">
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Incoming Relations ({nodeRelations.incoming.length})
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {nodeRelations.incoming.map((rel) => (
+                            <div
+                              key={rel.id}
+                              className="group flex items-start justify-between rounded-lg border border-border bg-secondary/30 p-2.5 text-xs transition-colors hover:border-primary/40"
+                            >
+                              <div className="space-y-1 min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="rounded bg-accent px-2 py-0.5 font-mono text-[11px] font-semibold text-foreground">
+                                    ← {rel.display_relation}
+                                  </span>
+                                  {rel.is_symmetric && (
+                                    <span className="rounded bg-secondary px-1.5 py-0.5 text-[9px] font-mono text-muted-foreground" title="Symmetric relation">
+                                      ↔ symmetric
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedId(rel.other_node.id)}
+                                    className="font-medium text-foreground hover:underline truncate"
+                                  >
+                                    {rel.other_node.name}
+                                  </button>
+                                  <span className="text-[10px] text-muted-foreground font-mono">
+                                    ({rel.other_node.node_type})
+                                  </span>
+                                </div>
+                                {rel.description && (
+                                  <p className="text-[11px] text-muted-foreground line-clamp-2">
+                                    {rel.description}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 ml-2">
+                                {rel.confidence !== null && (
+                                  <span className="font-mono text-[10px] text-muted-foreground" title="Confidence">
+                                    {(rel.confidence * 100).toFixed(0)}%
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => archiveRelation.mutate(rel.id)}
+                                  className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-opacity"
+                                  title="Archive relation"
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Row 3: Atomic Claims & Evidence Engine (Claims Section) */}
+              <div className="panel p-5">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-border/50 pb-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Quote className="size-4 text-primary" />
+                      <h3 className="text-base font-semibold">
+                        Atomic Claims & Evidence ({claimsWithEvidence.length})
+                      </h3>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Atomic assertions about {selected.name} grounded in verifiable sources and evidence stances
+                    </p>
+                  </div>
+
+                  <Button size="sm" onClick={() => setDialog("claim")}>
+                    <Plus className="size-4" /> Add atomic claim
+                  </Button>
+                </div>
+
+                {claimsWithEvidence.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border p-6 text-center">
+                    <Quote className="mx-auto size-8 text-muted-foreground/50 mb-2" />
+                    <p className="text-xs text-muted-foreground">
+                      No atomic claims added to {selected.name} yet.
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Atomic claims break knowledge into single verifiable facts (e.g. "{selected.name} supports Redis backends").
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="mt-3"
+                      onClick={() => setDialog("claim")}
+                    >
+                      <Plus className="size-3.5" /> Add first claim
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {claimsWithEvidence.map((claim) => {
+                      const supportingCount = claim.grouped.supporting.length;
+                      const contradictingCount = claim.grouped.contradicting.length;
+                      const totalEv = claim.evidences.length;
+
+                      // Determine verification badge styling
+                      let badgeColor = "bg-muted text-muted-foreground";
+                      let badgeIcon = <HelpCircle className="size-3" />;
+                      let badgeLabel = "Unverified";
+
+                      if (claim.verification === "verified" || claim.verification === "supported") {
+                        badgeColor = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30";
+                        badgeIcon = <CheckCircle2 className="size-3" />;
+                        badgeLabel = "Verified";
+                      } else if (claim.verification === "contradicted" || claim.verification === "rejected") {
+                        badgeColor = "bg-destructive/10 text-destructive border-destructive/30";
+                        badgeIcon = <XCircle className="size-3" />;
+                        badgeLabel = "Contradicted";
+                      } else if (claim.verification === "disputed") {
+                        badgeColor = "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30";
+                        badgeIcon = <AlertTriangle className="size-3" />;
+                        badgeLabel = "Conflicting Evidence";
+                      }
+
+                      return (
+                        <div
+                          key={claim.id}
+                          className="rounded-lg border border-border bg-card p-3.5 shadow-sm space-y-2.5 transition-colors hover:border-primary/30"
+                        >
+                          {/* Claim Statement */}
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="text-sm font-medium text-foreground leading-snug">
+                              "{claim.claim_text}"
+                            </p>
+                            {claim.status === "deprecated" && (
+                              <span className="rounded bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive">
+                                Deprecated
                               </span>
+                            )}
+                          </div>
+
+                          {/* Metadata row: type, verification, confidence, evidence count */}
+                          <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
+                            {/* Claim Type */}
+                            <span className="rounded bg-secondary px-2 py-0.5 font-mono text-muted-foreground">
+                              type: {claim.claim_type ?? "fact"}
+                            </span>
+
+                            {/* Verification Badge */}
+                            <span
+                              className={cn(
+                                "inline-flex items-center gap-1 rounded border px-2 py-0.5 font-medium text-[11px]",
+                                badgeColor,
+                              )}
+                            >
+                              {badgeIcon}
+                              {badgeLabel}
+                            </span>
+
+                            {/* Confidence */}
+                            {claim.confidence !== null && (
+                              <span className="rounded bg-secondary px-2 py-0.5 font-mono text-muted-foreground">
+                                confidence {(claim.confidence * 100).toFixed(0)}%
+                              </span>
+                            )}
+
+                            {/* Evidence Summary Counters */}
+                            <span className="rounded bg-secondary/80 px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+                              {totalEv === 0
+                                ? "No evidence attached"
+                                : `${supportingCount} supporting • ${contradictingCount} contradicting`}
+                            </span>
+                          </div>
+
+                          {/* Action Toolbar */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/50 pt-2 text-xs">
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs"
+                                onClick={() => {
+                                  setSelectedClaimForEvidence(claim);
+                                  setDialog("inspect-evidence");
+                                }}
+                              >
+                                <Scale className="size-3.5 mr-1" />
+                                Inspect Evidence ({totalEv})
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="h-7 text-xs"
+                                onClick={() => {
+                                  setSelectedClaimForEvidence(claim);
+                                  setDialog("attach-evidence");
+                                }}
+                              >
+                                <Plus className="size-3.5 mr-1" />
+                                Attach Evidence
+                              </Button>
+                            </div>
+
+                            {claim.status !== "deprecated" && (
                               <button
                                 type="button"
-                                className="truncate font-medium hover:underline"
-                                onClick={() => setSelectedId(otherId)}
+                                onClick={() => deprecateClaim.mutate(claim.id)}
+                                className="text-[11px] text-muted-foreground hover:text-destructive transition-colors"
                               >
-                                {nodeName(otherId)}
+                                Deprecate
                               </button>
-                            </div>
-                            {edge.confidence !== null ? (
-                              <span className="text-[10px] font-mono text-muted-foreground">
-                                {edge.confidence}
-                              </span>
-                            ) : null}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* 4. Cross-Category Knowledge Entries */}
@@ -1214,17 +1849,18 @@ function KnowledgePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog 5: Create Semantic Typed Relation */}
+      {/* Dialog 5: Create Semantic Typed Relation (Searchable & Validated) */}
       <Dialog open={dialog === "relation"} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Create Semantic Relation</DialogTitle>
             <DialogDescription>
-              Connect this node to another knowledge entity in the semantic knowledge graph.
+              Connect {selected?.name} to another concept in the Knowledge Brain.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3.5">
+          <div className="space-y-4">
+            {/* Relation Type Picker */}
             <div className="space-y-1.5">
               <Label>Relation Type</Label>
               <Select
@@ -1234,45 +1870,115 @@ function KnowledgePage() {
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  {RELATION_TYPES.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
+                <SelectContent className="max-h-64">
+                  {(relationTypesQuery.data ?? DEFAULT_RELATION_TYPES).map((t) => (
+                    <SelectItem key={t.key} value={t.key}>
+                      <span className="font-medium">{t.name}</span>
+                      <span className="ml-2 font-mono text-[10px] text-muted-foreground">
+                        {t.is_symmetric
+                          ? "(symmetric ↔)"
+                          : t.inverse_key
+                            ? `(inverse: ${t.inverse_key})`
+                            : ""}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-1.5">
-              <Label>Target Node</Label>
-              <Select
-                value={relationForm.target}
-                onValueChange={(v) => setRelationForm({ ...relationForm, target: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select target node" />
-                </SelectTrigger>
-                <SelectContent className="max-h-60">
-                  {allNodes
-                    .filter((n) => n.id !== selected?.id)
-                    .map((n) => (
-                      <SelectItem key={n.id} value={n.id}>
-                        {n.name} ({n.node_type})
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+            {/* Searchable Target Node Selector */}
+            <div className="space-y-2">
+              <Label>Target Knowledge Node</Label>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                <Input
+                  placeholder="Filter nodes by name or type…"
+                  className="pl-8 text-xs"
+                  value={relationSearch}
+                  onChange={(e) => setRelationSearch(e.target.value)}
+                />
+              </div>
+
+              <div className="max-h-40 overflow-y-auto space-y-1 rounded-md border border-border p-1 bg-secondary/20">
+                {allNodes
+                  .filter((n) => {
+                    if (n.id === selected?.id) return false;
+                    if (!relationSearch.trim()) return true;
+                    const q = relationSearch.toLowerCase();
+                    return (
+                      n.name.toLowerCase().includes(q) ||
+                      n.node_type.toLowerCase().includes(q) ||
+                      n.slug.toLowerCase().includes(q)
+                    );
+                  })
+                  .slice(0, 30)
+                  .map((n) => {
+                    const isSelected = relationForm.target === n.id;
+                    return (
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => setRelationForm({ ...relationForm, target: n.id })}
+                        className={cn(
+                          "flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left text-xs transition-colors",
+                          isSelected
+                            ? "bg-primary text-primary-foreground font-semibold"
+                            : "hover:bg-accent text-foreground",
+                        )}
+                      >
+                        <span className="truncate">{n.name}</span>
+                        <span className={cn("font-mono text-[10px]", isSelected ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                          {n.node_type} • /{n.slug}
+                        </span>
+                      </button>
+                    );
+                  })}
+              </div>
+
+              {relationForm.target !== NONE && (
+                <div className="rounded bg-secondary/50 px-2.5 py-1.5 text-xs text-foreground flex items-center justify-between">
+                  <span>Selected: <strong>{nodeName(relationForm.target)}</strong></span>
+                  <button
+                    type="button"
+                    onClick={() => setRelationForm({ ...relationForm, target: NONE })}
+                    className="text-[11px] text-muted-foreground hover:text-destructive"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="relation-description">Description (optional)</Label>
-              <Input
-                id="relation-description"
-                placeholder="e.g. Primary backend dependency"
-                value={relationForm.description}
-                onChange={(e) => setRelationForm({ ...relationForm, description: e.target.value })}
-              />
+            {/* Description & Confidence */}
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="relation-description">Description (optional)</Label>
+                <Input
+                  id="relation-description"
+                  placeholder="e.g. Core dependency or architectural pattern"
+                  value={relationForm.description}
+                  onChange={(e) => setRelationForm({ ...relationForm, description: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="relation-confidence">Confidence (0-1)</Label>
+                <Input
+                  id="relation-confidence"
+                  type="number"
+                  step="0.05"
+                  min="0"
+                  max="1"
+                  value={relationForm.confidence}
+                  onChange={(e) =>
+                    setRelationForm({
+                      ...relationForm,
+                      confidence: Math.min(1, Math.max(0, parseFloat(e.target.value) || 0)),
+                    })
+                  }
+                />
+              </div>
             </div>
           </div>
 
@@ -1281,7 +1987,371 @@ function KnowledgePage() {
               disabled={relationForm.target === NONE || addRelation.isPending}
               onClick={() => addRelation.mutate()}
             >
-              Create Relation
+              Save Relation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog 6: Add Atomic Claim */}
+      <Dialog open={dialog === "claim"} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <Quote className="size-4 text-primary" />
+              <DialogTitle>Add Atomic Claim</DialogTitle>
+            </div>
+            <DialogDescription>
+              State a single atomic claim about {selected?.name}. Single statements are easier to verify and link with evidence.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3.5">
+            <div className="space-y-1.5">
+              <Label htmlFor="claim-statement">Statement</Label>
+              <Textarea
+                id="claim-statement"
+                rows={3}
+                placeholder="e.g. Laravel queues can use Redis as an asynchronous worker backend."
+                value={claimForm.statement}
+                onChange={(e) => setClaimForm({ ...claimForm, statement: e.target.value })}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Tip: Keep it atomic. Rather than compound paragraphs, store individual claims for maximum clarity.
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Claim Type</Label>
+                <Select
+                  value={claimForm.claim_type}
+                  onValueChange={(v) => setClaimForm({ ...claimForm, claim_type: v as ClaimType })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CLAIM_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="claim-confidence">Initial Confidence</Label>
+                <Input
+                  id="claim-confidence"
+                  type="number"
+                  step="0.05"
+                  min="0"
+                  max="1"
+                  value={claimForm.confidence}
+                  onChange={(e) =>
+                    setClaimForm({
+                      ...claimForm,
+                      confidence: Math.min(1, Math.max(0, parseFloat(e.target.value) || 0)),
+                    })
+                  }
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              disabled={!claimForm.statement.trim() || addClaim.isPending}
+              onClick={() => addClaim.mutate()}
+            >
+              Add Atomic Claim
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog 7: Inspect Claim Evidence (Evidence Inspector) */}
+      <Dialog
+        open={dialog === "inspect-evidence"}
+        onOpenChange={(open) => !open && setDialog(null)}
+      >
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <Scale className="size-4 text-primary" />
+              <DialogTitle>Claim Evidence Inspector</DialogTitle>
+            </div>
+            <DialogDescription>
+              Auditable sources and evidence stances supporting or contradicting this atomic assertion.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedClaimForEvidence && (
+            <div className="space-y-4">
+              {/* Claim Overview Box */}
+              <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-1.5">
+                <p className="text-sm font-semibold text-foreground">
+                  "{selectedClaimForEvidence.claim_text}"
+                </p>
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground font-mono">
+                  <span>type: {selectedClaimForEvidence.claim_type ?? "fact"}</span>
+                  <span>•</span>
+                  <span>verification: <strong>{selectedClaimForEvidence.verification}</strong></span>
+                  <span>•</span>
+                  <span>status: {selectedClaimForEvidence.status}</span>
+                </div>
+              </div>
+
+              {/* Evidence Partition Lists */}
+              {(() => {
+                const claimEvs = (allEvidenceQuery.data ?? []).filter(
+                  (e) => e.claim_id === selectedClaimForEvidence.id,
+                );
+                const grouped = groupEvidenceByStance(claimEvs);
+
+                if (claimEvs.length === 0) {
+                  return (
+                    <div className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+                      No evidence records attached to this claim yet.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                    {/* Supporting Evidence */}
+                    {grouped.supporting.length > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="size-3.5" />
+                          Supporting Evidence ({grouped.supporting.length})
+                        </div>
+                        {grouped.supporting.map((ev) => (
+                          <div key={ev.id} className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2.5 text-xs space-y-1">
+                            {ev.excerpt && <p className="italic text-foreground">"{ev.excerpt}"</p>}
+                            <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-muted-foreground font-mono pt-1">
+                              <span>Locator: {ev.locator ?? "Direct quote"}</span>
+                              {ev.confidence !== null && <span>confidence: {(ev.confidence * 100).toFixed(0)}%</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Contradicting Evidence */}
+                    {grouped.contradicting.length > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-destructive">
+                          <XCircle className="size-3.5" />
+                          Contradicting Evidence ({grouped.contradicting.length})
+                        </div>
+                        {grouped.contradicting.map((ev) => (
+                          <div key={ev.id} className="rounded border border-destructive/30 bg-destructive/5 p-2.5 text-xs space-y-1">
+                            {ev.excerpt && <p className="italic text-foreground">"{ev.excerpt}"</p>}
+                            <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-muted-foreground font-mono pt-1">
+                              <span>Locator: {ev.locator ?? "Direct citation"}</span>
+                              {ev.confidence !== null && <span>confidence: {(ev.confidence * 100).toFixed(0)}%</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Qualifying or Mentioning Evidence */}
+                    {(grouped.qualifying.length > 0 || grouped.mentioning.length > 0) && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                          <HelpCircle className="size-3.5" />
+                          Qualifying / Mentions ({grouped.qualifying.length + grouped.mentioning.length})
+                        </div>
+                        {[...grouped.qualifying, ...grouped.mentioning].map((ev) => (
+                          <div key={ev.id} className="rounded border border-border bg-secondary/20 p-2.5 text-xs space-y-1">
+                            {ev.excerpt && <p className="italic text-foreground">"{ev.excerpt}"</p>}
+                            <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-muted-foreground font-mono pt-1">
+                              <span>Stance: {ev.stance} • Locator: {ev.locator ?? "General mention"}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setDialog("attach-evidence");
+              }}
+            >
+              <Plus className="size-4" /> Attach New Evidence
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog 8: Attach Evidence */}
+      <Dialog
+        open={dialog === "attach-evidence"}
+        onOpenChange={(open) => !open && setDialog(null)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <Scale className="size-4 text-primary" />
+              <DialogTitle>Attach Evidence to Claim</DialogTitle>
+            </div>
+            <DialogDescription>
+              Connect traceable source excerpts to ground or dispute this assertion.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3.5">
+            {/* Stance Selector */}
+            <div className="space-y-1.5">
+              <Label>Evidence Stance</Label>
+              <Select
+                value={evidenceForm.stance}
+                onValueChange={(v) =>
+                  setEvidenceForm({ ...evidenceForm, stance: v as EvidenceStance })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="supported">Supports Claim (Confirms assertion)</SelectItem>
+                  <SelectItem value="contradicted">Contradicts Claim (Disputes assertion)</SelectItem>
+                  <SelectItem value="qualifies">Qualifies Claim (Adds conditional nuance)</SelectItem>
+                  <SelectItem value="mentions">Mentions Claim (Contextual reference)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Source Selection or Quick Create */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Source Record</Label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEvidenceForm({
+                      ...evidenceForm,
+                      isCreatingSource: !evidenceForm.isCreatingSource,
+                    })
+                  }
+                  className="text-[11px] text-primary hover:underline"
+                >
+                  {evidenceForm.isCreatingSource ? "Select existing source" : "+ Quick create new source"}
+                </button>
+              </div>
+
+              {!evidenceForm.isCreatingSource ? (
+                <Select
+                  value={evidenceForm.source_id}
+                  onValueChange={(v) => setEvidenceForm({ ...evidenceForm, source_id: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a verifiable source" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-52">
+                    {(sourcesQuery.data ?? []).map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.title} ({s.source_kind})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="space-y-2 rounded-md border border-border p-2.5 bg-secondary/30 text-xs">
+                  <div className="space-y-1">
+                    <Label htmlFor="q-source-title">Source Title</Label>
+                    <Input
+                      id="q-source-title"
+                      placeholder="e.g. Official Documentation, Whitepaper…"
+                      value={evidenceForm.quickSourceTitle}
+                      onChange={(e) =>
+                        setEvidenceForm({ ...evidenceForm, quickSourceTitle: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="q-source-url">URL (optional)</Label>
+                    <Input
+                      id="q-source-url"
+                      placeholder="https://…"
+                      value={evidenceForm.quickSourceUrl}
+                      onChange={(e) =>
+                        setEvidenceForm({ ...evidenceForm, quickSourceUrl: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Excerpt / Citation */}
+            <div className="space-y-1.5">
+              <Label htmlFor="evidence-excerpt">Reference Quote / Excerpt</Label>
+              <Textarea
+                id="evidence-excerpt"
+                rows={2}
+                placeholder="Direct excerpt or quotation from the source…"
+                value={evidenceForm.excerpt}
+                onChange={(e) => setEvidenceForm({ ...evidenceForm, excerpt: e.target.value })}
+              />
+            </div>
+
+            {/* Locator & Evidence Type */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="evidence-locator">Locator</Label>
+                <Input
+                  id="evidence-locator"
+                  placeholder="Section 4.1, p. 12, #queue-driver"
+                  value={evidenceForm.locator}
+                  onChange={(e) => setEvidenceForm({ ...evidenceForm, locator: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Evidence Type</Label>
+                <Select
+                  value={evidenceForm.evidence_type}
+                  onValueChange={(v) =>
+                    setEvidenceForm({ ...evidenceForm, evidence_type: v as EvidenceType })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EVIDENCE_TYPES.map((et) => (
+                      <SelectItem key={et} value={et}>
+                        {et}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              disabled={
+                attachEvidence.isPending ||
+                (!evidenceForm.isCreatingSource && evidenceForm.source_id === NONE) ||
+                (evidenceForm.isCreatingSource && !evidenceForm.quickSourceTitle.trim())
+              }
+              onClick={() => attachEvidence.mutate()}
+            >
+              Attach Evidence
             </Button>
           </DialogFooter>
         </DialogContent>
