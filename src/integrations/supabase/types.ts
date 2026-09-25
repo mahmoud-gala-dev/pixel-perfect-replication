@@ -51,6 +51,7 @@ export type Database = {
         Row: {
           claim_id: string | null
           confidence: number | null
+          content_hash: string | null
           created_at: string
           created_by: string
           entry_id: string | null
@@ -60,13 +61,16 @@ export type Database = {
           locator: string | null
           metadata: Json
           node_id: string | null
+          observed_at: string | null
           source_id: string
+          source_location: string | null
           stance: Database["public"]["Enums"]["verification_status"]
           strength: number | null
         }
         Insert: {
           claim_id?: string | null
           confidence?: number | null
+          content_hash?: string | null
           created_at?: string
           created_by?: string
           entry_id?: string | null
@@ -76,13 +80,16 @@ export type Database = {
           locator?: string | null
           metadata?: Json
           node_id?: string | null
+          observed_at?: string | null
           source_id: string
+          source_location?: string | null
           stance?: Database["public"]["Enums"]["verification_status"]
           strength?: number | null
         }
         Update: {
           claim_id?: string | null
           confidence?: number | null
+          content_hash?: string | null
           created_at?: string
           created_by?: string
           entry_id?: string | null
@@ -92,7 +99,9 @@ export type Database = {
           locator?: string | null
           metadata?: Json
           node_id?: string | null
+          observed_at?: string | null
           source_id?: string
+          source_location?: string | null
           stance?: Database["public"]["Enums"]["verification_status"]
           strength?: number | null
         }
@@ -184,13 +193,19 @@ export type Database = {
           confidence: number | null
           conversation_id: string | null
           created_at: string
+          diff: Json | null
           id: string
+          message_id: string | null
+          metadata: Json | null
           new_state: Json | null
+          operation_id: string | null
           previous_state: Json | null
           reason: string | null
+          reason_summary: string | null
           source_id: string | null
           subject_id: string
           subject_table: string
+          transaction_id: string | null
         }
         Insert: {
           change_type: string
@@ -198,13 +213,19 @@ export type Database = {
           confidence?: number | null
           conversation_id?: string | null
           created_at?: string
+          diff?: Json | null
           id?: string
+          message_id?: string | null
+          metadata?: Json | null
           new_state?: Json | null
+          operation_id?: string | null
           previous_state?: Json | null
           reason?: string | null
+          reason_summary?: string | null
           source_id?: string | null
           subject_id: string
           subject_table: string
+          transaction_id?: string | null
         }
         Update: {
           change_type?: string
@@ -212,13 +233,19 @@ export type Database = {
           confidence?: number | null
           conversation_id?: string | null
           created_at?: string
+          diff?: Json | null
           id?: string
+          message_id?: string | null
+          metadata?: Json | null
           new_state?: Json | null
+          operation_id?: string | null
           previous_state?: Json | null
           reason?: string | null
+          reason_summary?: string | null
           source_id?: string | null
           subject_id?: string
           subject_table?: string
+          transaction_id?: string | null
         }
         Relationships: [
           {
@@ -244,14 +271,23 @@ export type Database = {
           confidence: number | null
           created_at: string
           created_by: string
+          deprecated_at: string | null
           entry_id: string | null
           id: string
+          knowledge_state: string | null
+          last_verified_at: string | null
           metadata: Json
           node_id: string | null
           normalized_statement: string | null
+          observed_at: string | null
           source_id: string | null
           status: Database["public"]["Enums"]["knowledge_status"]
+          superseded_at: string | null
+          superseded_by: string | null
+          temporal_context: Json | null
           updated_at: string
+          valid_from: string | null
+          valid_until: string | null
           verification: Database["public"]["Enums"]["verification_status"]
         }
         Insert: {
@@ -260,14 +296,23 @@ export type Database = {
           confidence?: number | null
           created_at?: string
           created_by?: string
+          deprecated_at?: string | null
           entry_id?: string | null
           id?: string
+          knowledge_state?: string | null
+          last_verified_at?: string | null
           metadata?: Json
           node_id?: string | null
           normalized_statement?: string | null
+          observed_at?: string | null
           source_id?: string | null
           status?: Database["public"]["Enums"]["knowledge_status"]
+          superseded_at?: string | null
+          superseded_by?: string | null
+          temporal_context?: Json | null
           updated_at?: string
+          valid_from?: string | null
+          valid_until?: string | null
           verification?: Database["public"]["Enums"]["verification_status"]
         }
         Update: {
@@ -276,14 +321,23 @@ export type Database = {
           confidence?: number | null
           created_at?: string
           created_by?: string
+          deprecated_at?: string | null
           entry_id?: string | null
           id?: string
+          knowledge_state?: string | null
+          last_verified_at?: string | null
           metadata?: Json
           node_id?: string | null
           normalized_statement?: string | null
+          observed_at?: string | null
           source_id?: string | null
           status?: Database["public"]["Enums"]["knowledge_status"]
+          superseded_at?: string | null
+          superseded_by?: string | null
+          temporal_context?: Json | null
           updated_at?: string
+          valid_from?: string | null
+          valid_until?: string | null
           verification?: Database["public"]["Enums"]["verification_status"]
         }
         Relationships: [
@@ -306,6 +360,72 @@ export type Database = {
             columns: ["source_id"]
             isOneToOne: false
             referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_conflicts: {
+        Row: {
+          claim_a_id: string
+          claim_b_id: string
+          conflict_type: string
+          created_at: string
+          detected_by: string
+          id: string
+          metadata: Json
+          reason_summary: string
+          resolution_notes: string | null
+          resolution_type: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          status: string
+        }
+        Insert: {
+          claim_a_id: string
+          claim_b_id: string
+          conflict_type: string
+          created_at?: string
+          detected_by?: string
+          id?: string
+          metadata?: Json
+          reason_summary: string
+          resolution_notes?: string | null
+          resolution_type?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          status?: string
+        }
+        Update: {
+          claim_a_id?: string
+          claim_b_id?: string
+          conflict_type?: string
+          created_at?: string
+          detected_by?: string
+          id?: string
+          metadata?: Json
+          reason_summary?: string
+          resolution_notes?: string | null
+          resolution_type?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_conflicts_claim_a_id_fkey"
+            columns: ["claim_a_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_claims"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_conflicts_claim_b_id_fkey"
+            columns: ["claim_b_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_claims"
             referencedColumns: ["id"]
           },
         ]
@@ -1205,27 +1325,45 @@ export type Database = {
       }
       knowledge_versions: {
         Row: {
+          change_type: string
           created_at: string
           created_by: string
           id: string
+          knowledge_operation_id: string | null
+          knowledge_transaction_id: string | null
+          metadata: Json | null
+          previous_version_id: string | null
+          reason_summary: string | null
           snapshot: Json
           subject_id: string
           subject_table: string
           version: number
         }
         Insert: {
+          change_type?: string
           created_at?: string
           created_by?: string
           id?: string
+          knowledge_operation_id?: string | null
+          knowledge_transaction_id?: string | null
+          metadata?: Json | null
+          previous_version_id?: string | null
+          reason_summary?: string | null
           snapshot: Json
           subject_id: string
           subject_table: string
           version: number
         }
         Update: {
+          change_type?: string
           created_at?: string
           created_by?: string
           id?: string
+          knowledge_operation_id?: string | null
+          knowledge_transaction_id?: string | null
+          metadata?: Json | null
+          previous_version_id?: string | null
+          reason_summary?: string | null
           snapshot?: Json
           subject_id?: string
           subject_table?: string
@@ -1347,15 +1485,19 @@ export type Database = {
         Row: {
           accessed_at: string | null
           author: string | null
+          availability: string | null
+          content_hash: string | null
           created_at: string
           created_by: string
           deleted_at: string | null
           id: string
+          last_checked_at: string | null
           metadata: Json
           published_at: string | null
           publisher: string | null
           reliability: number | null
           source_kind: Database["public"]["Enums"]["source_kind"]
+          source_quality: string | null
           title: string
           updated_at: string
           url: string | null
@@ -1363,15 +1505,19 @@ export type Database = {
         Insert: {
           accessed_at?: string | null
           author?: string | null
+          availability?: string | null
+          content_hash?: string | null
           created_at?: string
           created_by?: string
           deleted_at?: string | null
           id?: string
+          last_checked_at?: string | null
           metadata?: Json
           published_at?: string | null
           publisher?: string | null
           reliability?: number | null
           source_kind?: Database["public"]["Enums"]["source_kind"]
+          source_quality?: string | null
           title: string
           updated_at?: string
           url?: string | null
@@ -1379,15 +1525,19 @@ export type Database = {
         Update: {
           accessed_at?: string | null
           author?: string | null
+          availability?: string | null
+          content_hash?: string | null
           created_at?: string
           created_by?: string
           deleted_at?: string | null
           id?: string
+          last_checked_at?: string | null
           metadata?: Json
           published_at?: string | null
           publisher?: string | null
           reliability?: number | null
           source_kind?: Database["public"]["Enums"]["source_kind"]
+          source_quality?: string | null
           title?: string
           updated_at?: string
           url?: string | null
@@ -1399,6 +1549,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      rollback_entity_to_version: {
+        Args: {
+          p_subject_table: string
+          p_subject_id: string
+          p_target_version: number
+          p_reason?: string
+        }
+        Returns: Json
+      }
+      explain_claim_knowledge: {
+        Args: {
+          p_claim_id: string
+        }
+        Returns: Json
+      }
       commit_knowledge_plan: {
         Args: {
           p_plan_id: string

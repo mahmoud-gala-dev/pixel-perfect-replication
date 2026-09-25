@@ -188,9 +188,22 @@ export class BrainContextBuilder {
     if (claims.length > 0) {
       parts.push("\nGROUNDED ATOMIC CLAIMS:");
       for (const c of claims) {
-        const verif = ` [Status: ${c.verification}]`;
+        const isConflicted = c.is_conflicted || c.knowledge_state === "conflicted" || c.status === "conflicted";
+        const isOutdated = c.is_outdated || c.knowledge_state === "outdated" || c.status === "outdated";
+        const isSuperseded = c.knowledge_state === "superseded" || c.status === "superseded";
+
+        let warning = "";
+        if (isConflicted) {
+          warning = " [WARNING: CONFLICTED KNOWLEDGE - DO NOT PRESENT AS SETTLED FACT]";
+        } else if (isOutdated) {
+          warning = " [WARNING: OUTDATED KNOWLEDGE - VALIDITY EXPIRED]";
+        } else if (isSuperseded) {
+          warning = " [WARNING: SUPERSEDED KNOWLEDGE]";
+        }
+
+        const verif = ` [Status: ${c.verification || c.status}]`;
         const src = c.source ? ` (Source: ${c.source.title})` : "";
-        parts.push(`• "${c.statement}" (${c.claim_type})${verif}${src}`);
+        parts.push(`• "${c.statement}" (${c.claim_type})${verif}${src}${warning}`);
       }
     }
 
@@ -249,15 +262,21 @@ export class BrainContextBuilder {
       summary: null,
     }));
 
-    const formattedClaims: BrainContextClaim[] = matchedClaims.map((c) => ({
-      id: c.id,
-      node_id: c.node_id ?? null,
-      statement: c.statement ?? c.claim_text ?? "",
-      claim_type: c.claim_type ?? "fact",
-      status: c.status ?? "active",
-      verification: c.verification ?? "verified",
-      confidence: c.confidence ?? null,
-    }));
+    const formattedClaims: BrainContextClaim[] = matchedClaims.map((c) => {
+      const kState = (c as any).knowledge_state || (c.status === "conflicted" || c.status === "outdated" || c.status === "superseded" ? c.status : "known");
+      return {
+        id: c.id,
+        node_id: c.node_id ?? null,
+        statement: c.statement ?? c.claim_text ?? "",
+        claim_type: c.claim_type ?? "fact",
+        status: c.status ?? "active",
+        verification: c.verification ?? "verified",
+        confidence: c.confidence ?? null,
+        knowledge_state: kState,
+        is_conflicted: kState === "conflicted" || c.status === "conflicted",
+        is_outdated: kState === "outdated" || c.status === "outdated",
+      };
+    });
 
     const formattedRelations: BrainContextRelation[] = matchedEdges.map((e) => ({
       id: e.id,
@@ -279,4 +298,62 @@ export class BrainContextBuilder {
       },
     };
   }
+
+  /**
+   * Formats a raw or mock Brain context payload for inclusion in AI Chat prompt.
+   */
+  public formatForPrompt(data: {
+    nodes?: any[];
+    claims?: any[];
+    edges?: any[];
+    relations?: any[];
+  }): string {
+    return BrainContextBuilder.formatForPrompt(data);
+  }
+
+  public static formatForPrompt(data: {
+    nodes?: any[];
+    claims?: any[];
+    edges?: any[];
+    relations?: any[];
+  }): string {
+    const rawNodes = data.nodes || [];
+    const nodeMap = new Map<string, string>(rawNodes.map((n: any) => [n.id, n.canonical_name || n.name || "Unknown"]));
+
+    const nodes: BrainContextNode[] = rawNodes.map((n: any) => ({
+      id: n.id,
+      name: n.canonical_name || n.name || "Unknown",
+      node_type: n.node_type || "concept",
+      status: n.status || "active",
+      description: n.description || null,
+      summary: null,
+    }));
+
+    const claims: BrainContextClaim[] = (data.claims || []).map((c: any) => {
+      const kState = c.knowledge_state || (c.status === "conflicted" || c.status === "outdated" || c.status === "superseded" ? c.status : "known");
+      return {
+        id: c.id,
+        node_id: c.node_id || null,
+        statement: c.statement || c.claim_text || "",
+        claim_type: c.claim_type || "fact",
+        status: c.status || "active",
+        verification: c.verification || "verified",
+        confidence: c.confidence ?? null,
+        knowledge_state: kState,
+        is_conflicted: Boolean(c.is_conflicted || kState === "conflicted" || c.status === "conflicted"),
+        is_outdated: Boolean(c.is_outdated || kState === "outdated" || c.status === "outdated"),
+      };
+    });
+
+    const relations: BrainContextRelation[] = (data.edges || data.relations || []).map((e: any) => ({
+      id: e.id,
+      relation_type: e.relation_type,
+      status: e.status || "active",
+      source: { id: e.source_node_id || "s", name: nodeMap.get(e.source_node_id) || e.source?.name || "Source" },
+      target: { id: e.target_node_id || "t", name: nodeMap.get(e.target_node_id) || e.target?.name || "Target" },
+    }));
+
+    return this.formatPayloadToText(nodes, claims, relations);
+  }
 }
+

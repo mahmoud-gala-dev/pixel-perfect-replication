@@ -38,7 +38,14 @@ export type OperationType =
   | "DEPRECATE_CLAIM"
   | "NO_OP"
   | "QUARANTINE_CLAIM"
-  | "QUARANTINE_NODE";
+  | "QUARANTINE_NODE"
+  | "ROLLBACK"
+  | "RESTORE"
+  | "SUPERSEDE_CLAIM"
+  | "MARK_OUTDATED"
+  | "RESOLVE_CONFLICT"
+  | "VERIFY_CLAIM"
+  | "DISPUTE_CLAIM";
 
 export type OperationStatus = Database["public"]["Enums"]["operation_status"];
 
@@ -90,26 +97,45 @@ export interface PlannedOperationPayload {
   subject_node_id?: string | undefined;
   is_conflicting?: boolean | undefined;
   conflicting_with_claim_id?: string | undefined;
+  verification?: string | undefined;
+  knowledge_state?: string | undefined;
+  valid_from?: string | null | undefined;
+  valid_until?: string | null | undefined;
+  observed_at?: string | null | undefined;
+  metadata?: Record<string, unknown> | undefined;
+
+  // Rollback & Integrity operations
+  subject_table?: string | undefined;
+  subject_id?: string | undefined;
+  target_version?: number | undefined;
+  claim_id?: string | undefined;
+  superseded_by?: string | null | undefined;
+  resolution_type?: string | undefined;
+  resolution_notes?: string | undefined;
+  conflict_id?: string | undefined;
+
+  [key: string]: unknown;
 }
 
 export interface KnowledgeOperationItem {
-  id?: string;
-  plan_id?: string;
-  proposal_id?: string | null;
+  id?: string | undefined;
+  plan_id?: string | undefined;
+  proposal_id?: string | null | undefined;
+  message_id?: string | null | undefined;
   operation_type: OperationType;
   target_type: "node" | "relation" | "claim" | "alias";
-  target_id?: string | null;
+  target_id?: string | null | undefined;
   status: OperationStatus;
   payload: PlannedOperationPayload;
-  previous_state?: Record<string, unknown> | null;
-  proposed_state?: Record<string, unknown> | null;
-  diff?: KnowledgeDiff | null;
+  previous_state?: Record<string, unknown> | null | undefined;
+  proposed_state?: Record<string, unknown> | null | undefined;
+  diff?: KnowledgeDiff | null | undefined;
   confidence: number;
   risk_level: RiskLevel;
   trust_tier: TrustTier;
   reason_summary: string;
   execution_order: number;
-  dependencies?: string[]; // IDs or temp_ids that must execute before this
+  dependencies?: string[] | undefined; // IDs or temp_ids that must execute before this
 }
 
 export interface KnowledgePlanSummary {

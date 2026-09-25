@@ -35,6 +35,12 @@ export interface EngineInMemoryContext {
   claims?: KnowledgeClaim[] | undefined;
   aliases?: KnowledgeAlias[] | undefined;
   settings?: BrainLearningSettings | undefined;
+  versions?: any[] | undefined;
+  changes?: any[] | undefined;
+  transactions?: any[] | undefined;
+  conflicts?: any[] | undefined;
+  evidence?: any[] | undefined;
+  sources?: any[] | undefined;
 }
 
 export class KnowledgeEngine {
@@ -296,6 +302,9 @@ export class KnowledgeEngine {
         ? plan.operations.filter((o) => approvedOperationIds.includes(o.id || o.proposal_id || ""))
         : plan.operations;
 
+      const transactionId = (plan as any).knowledge_transaction_id || `tx-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      const now = new Date().toISOString();
+
       for (const op of operationsToExecute) {
         if (op.operation_type === "NO_OP") {
           summary.no_ops++;
@@ -322,8 +331,8 @@ export class KnowledgeEngine {
               description: op.payload.description || null,
               summary: op.payload.summary || null,
               created_by: "engine",
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
+              created_at: now,
+              updated_at: now,
               deleted_at: null,
               metadata: {},
               embedding_status: "pending",
@@ -336,6 +345,44 @@ export class KnowledgeEngine {
             if (op.payload.temp_id) tempToCanonicalMap.set(op.payload.temp_id, newNodeId);
             tempToCanonicalMap.set(name, newNodeId);
             op.target_id = newNodeId;
+
+            // Phase 8: Record Version 1 & Creation Change
+            if (inMemoryContext.versions) {
+              inMemoryContext.versions.push({
+                id: `ver-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+                subject_table: "knowledge_nodes",
+                subject_id: newNodeId,
+                version: 1,
+                snapshot: { ...newNode },
+                change_type: "CREATE",
+                previous_version_id: null,
+                knowledge_transaction_id: transactionId,
+                knowledge_operation_id: op.id,
+                reason_summary: op.reason_summary || "Initial node creation",
+                metadata: {},
+                created_by: "engine",
+                created_at: now,
+              });
+            }
+            if (inMemoryContext.changes) {
+              inMemoryContext.changes.push({
+                id: `chg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+                subject_table: "knowledge_nodes",
+                subject_id: newNodeId,
+                change_type: "CREATE",
+                previous_state: null,
+                new_state: { ...newNode },
+                diff: null,
+                reason: op.reason_summary || "Initial node creation",
+                reason_summary: op.reason_summary || "Initial node creation",
+                operation_id: op.id,
+                transaction_id: transactionId,
+                conversation_id: plan.conversation_id || null,
+                message_id: op.message_id || null,
+                changed_by: "engine",
+                created_at: now,
+              });
+            }
           } else {
             summary.no_ops++;
             if (op.payload.temp_id) tempToCanonicalMap.set(op.payload.temp_id, existing.id);
@@ -346,10 +393,56 @@ export class KnowledgeEngine {
         } else if (op.operation_type === "UPDATE_NODE") {
           const targetNode = inMemoryContext.nodes.find((n) => n.id === op.target_id);
           if (targetNode) {
+            const prevSnapshot = { ...targetNode };
             if (op.payload.description) targetNode.description = op.payload.description;
             if (op.payload.summary) targetNode.summary = op.payload.summary;
             targetNode.embedding_status = "stale";
+            targetNode.updated_at = now;
             summary.updated_nodes++;
+
+            // Phase 8: Record Next Version v(N+1) & Update Change
+            const entityVers = (inMemoryContext.versions || [])
+              .filter((v) => v.subject_table === "knowledge_nodes" && v.subject_id === targetNode.id)
+              .sort((a, b) => b.version - a.version);
+            const nextVerNum = (entityVers[0]?.version || 1) + 1;
+            const newVerId = `ver-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+
+            if (inMemoryContext.versions) {
+              inMemoryContext.versions.push({
+                id: newVerId,
+                subject_table: "knowledge_nodes",
+                subject_id: targetNode.id,
+                version: nextVerNum,
+                snapshot: { ...targetNode },
+                change_type: "UPDATE",
+                previous_version_id: entityVers[0]?.id || null,
+                knowledge_transaction_id: transactionId,
+                knowledge_operation_id: op.id,
+                reason_summary: op.reason_summary || "Updated node description/summary",
+                metadata: {},
+                created_by: "engine",
+                created_at: now,
+              });
+            }
+            if (inMemoryContext.changes) {
+              inMemoryContext.changes.push({
+                id: `chg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+                subject_table: "knowledge_nodes",
+                subject_id: targetNode.id,
+                change_type: "UPDATE",
+                previous_state: prevSnapshot,
+                new_state: { ...targetNode },
+                diff: { description: op.payload.description, summary: op.payload.summary },
+                reason: op.reason_summary || "Updated node description/summary",
+                reason_summary: op.reason_summary || "Updated node description/summary",
+                operation_id: op.id,
+                transaction_id: transactionId,
+                conversation_id: plan.conversation_id || null,
+                message_id: op.message_id || null,
+                changed_by: "engine",
+                created_at: now,
+              });
+            }
           }
           op.status = "executed";
         } else if (op.operation_type === "ADD_ALIAS") {
@@ -368,8 +461,8 @@ export class KnowledgeEngine {
                 language: op.payload.language || "en",
                 metadata: {},
                 created_by: "engine",
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
+                created_at: now,
+                updated_at: now,
               });
             } else {
               summary.no_ops++;
@@ -397,8 +490,8 @@ export class KnowledgeEngine {
                 confidence: op.confidence,
                 description: op.payload.description || null,
                 created_by: "engine",
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
+                created_at: now,
+                updated_at: now,
                 metadata: {},
               });
               summary.created_relations++;
@@ -421,26 +514,162 @@ export class KnowledgeEngine {
                 ((c.claim_text || (c as any).statement || "").trim().toLowerCase() === normStmt),
             );
             if (!exists) {
-              inMemoryContext.claims.push({
-                id: `claim-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+              const newClaimId = `claim-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+              const newClaim: any = {
+                id: newClaimId,
                 node_id: subId,
                 claim_text: stmt,
                 claim_type: op.payload.claim_type || "fact",
                 confidence: op.confidence,
                 status: "active",
-                verification: "verified",
-                source_id: null,
+                verification: (op.payload.verification || "verified") as any,
+                knowledge_state: (op.payload.knowledge_state || "known") as any,
+                source_id: op.payload.source_id || null,
                 entry_id: null,
                 normalized_statement: normStmt,
+                valid_from: op.payload.valid_from || null,
+                valid_until: op.payload.valid_until || null,
+                observed_at: op.payload.observed_at || null,
                 created_by: "engine",
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                metadata: {},
-              });
+                created_at: now,
+                updated_at: now,
+                metadata: op.payload.metadata || {},
+              };
+              inMemoryContext.claims.push(newClaim);
               summary.added_claims++;
+
+              // Phase 8: Record Version 1 & Claim Add Change
+              if (inMemoryContext.versions) {
+                inMemoryContext.versions.push({
+                  id: `ver-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+                  subject_table: "knowledge_claims",
+                  subject_id: newClaimId,
+                  version: 1,
+                  snapshot: { ...newClaim },
+                  change_type: "ADD_CLAIM",
+                  previous_version_id: null,
+                  knowledge_transaction_id: transactionId,
+                  knowledge_operation_id: op.id,
+                  reason_summary: op.reason_summary || "Added new claim",
+                  metadata: {},
+                  created_by: "engine",
+                  created_at: now,
+                });
+              }
+              if (inMemoryContext.changes) {
+                inMemoryContext.changes.push({
+                  id: `chg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+                  subject_table: "knowledge_claims",
+                  subject_id: newClaimId,
+                  change_type: "ADD_CLAIM",
+                  previous_state: null,
+                  new_state: { ...newClaim },
+                  diff: null,
+                  reason: op.reason_summary || "Added new claim",
+                  reason_summary: op.reason_summary || "Added new claim",
+                  operation_id: op.id,
+                  transaction_id: transactionId,
+                  conversation_id: plan.conversation_id || null,
+                  message_id: op.message_id || null,
+                  changed_by: "engine",
+                  created_at: now,
+                });
+              }
             } else {
               summary.no_ops++;
             }
+          }
+          op.status = "executed";
+        } else if (op.operation_type === "ROLLBACK") {
+          // Phase 8: Controlled non-destructive rollback
+          const targetTable = op.payload.subject_table || "knowledge_nodes";
+          const targetId = op.target_id || op.payload.subject_id;
+          const targetVerNum = op.payload.target_version;
+
+          const entityVers = (inMemoryContext.versions || [])
+            .filter((v) => v.subject_table === targetTable && v.subject_id === targetId)
+            .sort((a, b) => b.version - a.version);
+
+          const targetVer = entityVers.find((v) => v.version === targetVerNum);
+          if (targetVer) {
+            const latestVerNum = entityVers[0]?.version || 1;
+            const nextVerNum = latestVerNum + 1;
+            const restoredSnapshot = { ...targetVer.snapshot };
+
+            if (targetTable === "knowledge_nodes" && inMemoryContext.nodes) {
+              const node = inMemoryContext.nodes.find((n) => n.id === targetId);
+              if (node) {
+                if (restoredSnapshot.name !== undefined) node.name = restoredSnapshot.name as string;
+                if (restoredSnapshot.description !== undefined) node.description = restoredSnapshot.description as string;
+                if (restoredSnapshot.summary !== undefined) node.summary = restoredSnapshot.summary as string;
+                node.updated_at = now;
+              }
+            } else if (targetTable === "knowledge_claims" && inMemoryContext.claims) {
+              const claim = inMemoryContext.claims.find((c) => c.id === targetId);
+              if (claim) {
+                if (restoredSnapshot.claim_text !== undefined) claim.claim_text = restoredSnapshot.claim_text as string;
+                if (restoredSnapshot.knowledge_state !== undefined) (claim as any).knowledge_state = restoredSnapshot.knowledge_state;
+                if (restoredSnapshot.verification !== undefined) claim.verification = restoredSnapshot.verification as any;
+                claim.updated_at = now;
+              }
+            }
+
+            if (inMemoryContext.versions) {
+              inMemoryContext.versions.push({
+                id: `ver-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+                subject_table: targetTable,
+                subject_id: targetId,
+                version: nextVerNum,
+                snapshot: restoredSnapshot,
+                change_type: "ROLLBACK",
+                previous_version_id: entityVers[0]?.id || null,
+                knowledge_transaction_id: transactionId,
+                knowledge_operation_id: op.id,
+                reason_summary: op.reason_summary || `Rollback to version ${targetVerNum}`,
+                metadata: { target_version: targetVerNum },
+                created_by: "engine",
+                created_at: now,
+              });
+            }
+            if (inMemoryContext.changes) {
+              inMemoryContext.changes.push({
+                id: `chg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+                subject_table: targetTable,
+                subject_id: targetId,
+                change_type: "ROLLBACK",
+                previous_state: entityVers[0]?.snapshot || null,
+                new_state: restoredSnapshot,
+                diff: null,
+                reason: op.reason_summary || `Rollback to version ${targetVerNum}`,
+                reason_summary: op.reason_summary || `Rollback to version ${targetVerNum}`,
+                operation_id: op.id,
+                transaction_id: transactionId,
+                conversation_id: plan.conversation_id || null,
+                message_id: op.message_id || null,
+                changed_by: "engine",
+                created_at: now,
+              });
+            }
+          }
+          op.status = "executed";
+        } else if (op.operation_type === "SUPERSEDE_CLAIM") {
+          const claimId = op.target_id || op.payload.claim_id;
+          const supersededBy = op.payload.superseded_by;
+          const targetClaim = inMemoryContext.claims?.find((c) => c.id === claimId);
+          if (targetClaim) {
+            (targetClaim as any).knowledge_state = "superseded";
+            (targetClaim as any).superseded_by = supersededBy || null;
+            (targetClaim as any).superseded_at = now;
+            targetClaim.updated_at = now;
+          }
+          op.status = "executed";
+        } else if (op.operation_type === "MARK_OUTDATED") {
+          const claimId = op.target_id || op.payload.claim_id;
+          const targetClaim = inMemoryContext.claims?.find((c) => c.id === claimId);
+          if (targetClaim) {
+            (targetClaim as any).knowledge_state = "outdated";
+            (targetClaim as any).deprecated_at = now;
+            targetClaim.updated_at = now;
           }
           op.status = "executed";
         } else if (op.operation_type === "QUARANTINE_CLAIM" || op.operation_type === "QUARANTINE_NODE") {
@@ -449,14 +678,30 @@ export class KnowledgeEngine {
         }
       }
 
+      // Phase 8: Record completed transaction
+      if (inMemoryContext.transactions) {
+        inMemoryContext.transactions.push({
+          id: transactionId,
+          plan_id: plan.id,
+          conversation_id: plan.conversation_id || null,
+          status: "committed",
+          operation_count: plan.operations.length,
+          summary,
+          initiated_by: "engine",
+          started_at: plan.created_at,
+          completed_at: now,
+          metadata: { plan_version: plan.plan_version },
+        });
+      }
+
       plan.status = "committed";
-      plan.committed_at = new Date().toISOString();
+      plan.committed_at = now;
       plan.summary = summary;
 
       return {
         success: true,
         plan_id: plan.id,
-        transaction_id: `tx-${Date.now().toString(36)}`,
+        transaction_id: transactionId,
         summary,
       };
     }

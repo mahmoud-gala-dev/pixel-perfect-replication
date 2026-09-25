@@ -17,6 +17,9 @@ import {
   ChevronRight,
   Database,
   Clock,
+  AlertTriangle,
+  CheckCircle,
+  RotateCcw,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell, EmptyState } from "@/components/AppShell";
@@ -91,12 +94,81 @@ export function ActivityPage() {
     },
   });
 
+  // 4. Fetch Health Metrics (Phase 8 Section 85)
+  const { data: healthClaims = [] } = useQuery({
+    queryKey: ["health-claims"],
+    enabled: !!session,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("knowledge_claims")
+        .select("id, verification, knowledge_state");
+      return (data ?? []) as any[];
+    },
+  });
+
+  const { data: healthConflicts = [] } = useQuery({
+    queryKey: ["health-conflicts"],
+    enabled: !!session,
+    queryFn: async () => {
+      const { data } = await (supabase.from("knowledge_conflicts" as any).select("id, status") as any);
+      return (data ?? []) as any[];
+    },
+  });
+
+  const { data: healthRollbacks = [] } = useQuery({
+    queryKey: ["health-rollbacks"],
+    enabled: !!session,
+    queryFn: async () => {
+      const { data } = await (supabase.from("knowledge_versions" as any).select("id").eq("change_type", "ROLLBACK") as any);
+      return (data ?? []) as any[];
+    },
+  });
+
+  const verifiedCount = healthClaims.filter((c: any) => c.verification === "verified" || c.verification === "supported").length;
+  const unverifiedCount = healthClaims.filter((c: any) => c.verification === "unverified" || !c.verification).length;
+  const conflictedCount = healthClaims.filter((c: any) => c.knowledge_state === "conflicted").length;
+  const outdatedCount = healthClaims.filter((c: any) => c.knowledge_state === "outdated" || c.knowledge_state === "superseded").length;
+  const openConflictsCount = healthConflicts.filter((c: any) => c.status === "OPEN" || c.status === "UNDER_REVIEW").length;
+  const rollbackEventsCount = healthRollbacks.length;
+
   return (
     <AppShell
       title="Brain Activity"
       description="Inspect atomic learning transactions, knowledge operations, and the canonical audit trail."
     >
-      <div className="space-y-4">
+      <div className="space-y-5">
+        {/* Phase 8: Brain Health & Knowledge Integrity Overview */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="rounded-lg border border-border bg-card p-3 space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium">Verified Claims</span>
+            <div className="text-xl font-bold text-emerald-400">{verifiedCount}</div>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-3 space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium">Unverified</span>
+            <div className="text-xl font-bold text-muted-foreground">{unverifiedCount}</div>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-3 space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium">Conflicted</span>
+            <div className={`text-xl font-bold ${conflictedCount > 0 ? "text-rose-400" : "text-foreground"}`}>
+              {conflictedCount}
+            </div>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-3 space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium">Outdated / Superseded</span>
+            <div className="text-xl font-bold text-amber-400">{outdatedCount}</div>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-3 space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium">Open Conflicts</span>
+            <div className={`text-xl font-bold ${openConflictsCount > 0 ? "text-rose-400" : "text-foreground"}`}>
+              {openConflictsCount}
+            </div>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-3 space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium">Rollback Events</span>
+            <div className="text-xl font-bold text-purple-400">{rollbackEventsCount}</div>
+          </div>
+        </div>
+
         {/* Navigation Tabs */}
         <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
           <Button

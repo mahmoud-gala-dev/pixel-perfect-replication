@@ -13,3 +13,4 @@ export * from "./providers/mock-brain-provider";
 export * from "./extraction";
 export * from "./resolution";
 export * from "./learning";
+export * from "./integrity";

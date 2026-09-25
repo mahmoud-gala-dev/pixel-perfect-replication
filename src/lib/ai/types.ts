@@ -34,6 +34,11 @@ export interface BrainContextClaim {
   status: string;
   verification: string;
   confidence?: number | null | undefined;
+  knowledge_state?: string | undefined;
+  is_conflicted?: boolean | undefined;
+  is_outdated?: boolean | undefined;
+  valid_from?: string | null | undefined;
+  valid_until?: string | null | undefined;
   source?: {
     title: string;
     url?: string | null | undefined;

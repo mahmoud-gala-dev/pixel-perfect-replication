@@ -26,6 +26,7 @@ import {
   Layers,
   Search,
   ArrowLeftRight,
+  History,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -33,6 +34,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { AppShell, EmptyState } from "@/components/AppShell";
 import { KnowledgeTree } from "@/components/KnowledgeTree";
 import { useAuth } from "@/hooks/useAuth";
+import { EntityHistoryModal } from "@/components/knowledge/EntityHistoryModal";
+import { EvidencePathModal } from "@/components/knowledge/EvidencePathModal";
+import { ConflictDashboardModal } from "@/components/knowledge/ConflictDashboardModal";
 import {
   ALIAS_TYPES,
   buildHierarchyTree,
@@ -182,6 +186,12 @@ function KnowledgePage() {
     resolution: NodeResolutionResult;
     input: SafeCreateNodeInput;
   } | null>(null);
+
+  // Phase 8: History, Evidence Path & Conflict states
+  const [selectedHistoryEntity, setSelectedHistoryEntity] = useState<{ table: string; id: string; name: string } | null>(null);
+  const [selectedClaimForPath, setSelectedClaimForPath] = useState<string | null>(null);
+  const [showConflictDashboard, setShowConflictDashboard] = useState<boolean>(false);
+  const [showOutdatedClaims, setShowOutdatedClaims] = useState<boolean>(false);
 
   // Fetch all nodes
   const nodesQuery = useQuery({
@@ -418,6 +428,14 @@ function KnowledgePage() {
       };
     });
   }, [claimsQuery.data, allEvidenceQuery.data]);
+
+  const displayedClaims = useMemo(() => {
+    return claimsWithEvidence.filter((c) => {
+      if (showOutdatedClaims) return true;
+      const state = (c as any).knowledge_state;
+      return state !== "outdated" && state !== "superseded" && state !== "deprecated";
+    });
+  }, [claimsWithEvidence, showOutdatedClaims]);
 
   function refreshAll() {
     void queryClient.invalidateQueries({ queryKey: ["nodes"] });
@@ -843,9 +861,20 @@ function KnowledgePage() {
       title="Knowledge Explorer"
       description="Unlimited-depth hierarchy, canonical identity, aliases, and semantic relations."
       actions={
-        <Button size="sm" onClick={() => openCreate(false)}>
-          <Plus className="size-4" /> New root node
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10 gap-1.5"
+            onClick={() => setShowConflictDashboard(true)}
+          >
+            <AlertTriangle className="size-4" />
+            Conflict Engine
+          </Button>
+          <Button size="sm" onClick={() => openCreate(false)}>
+            <Plus className="size-4" /> New root node
+          </Button>
+        </div>
       }
     >
       <div className="grid gap-5 lg:grid-cols-[22rem_1fr]">
@@ -962,6 +991,19 @@ function KnowledgePage() {
                       }}
                     >
                       <FolderTree className="size-4" /> Move
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setSelectedHistoryEntity({
+                          table: "knowledge_nodes",
+                          id: selected.id,
+                          name: selected.name,
+                        });
+                      }}
+                    >
+                      <History className="size-4" /> History
                     </Button>
                     <Button
                       size="sm"
@@ -1297,7 +1339,7 @@ function KnowledgePage() {
                     <div className="flex items-center gap-2">
                       <Quote className="size-4 text-primary" />
                       <h3 className="text-base font-semibold">
-                        Atomic Claims & Evidence ({claimsWithEvidence.length})
+                        Atomic Claims & Evidence ({displayedClaims.length})
                       </h3>
                     </div>
                     <p className="text-xs text-muted-foreground">
@@ -1305,12 +1347,22 @@ function KnowledgePage() {
                     </p>
                   </div>
 
-                  <Button size="sm" onClick={() => setDialog("claim")}>
-                    <Plus className="size-4" /> Add atomic claim
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 text-xs text-muted-foreground"
+                      onClick={() => setShowOutdatedClaims(!showOutdatedClaims)}
+                    >
+                      {showOutdatedClaims ? "Hide outdated/superseded" : "Show outdated/superseded"}
+                    </Button>
+                    <Button size="sm" onClick={() => setDialog("claim")}>
+                      <Plus className="size-4" /> Add atomic claim
+                    </Button>
+                  </div>
                 </div>
 
-                {claimsWithEvidence.length === 0 ? (
+                {displayedClaims.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-border p-6 text-center">
                     <Quote className="mx-auto size-8 text-muted-foreground/50 mb-2" />
                     <p className="text-xs text-muted-foreground">
@@ -1330,10 +1382,11 @@ function KnowledgePage() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {claimsWithEvidence.map((claim) => {
+                    {displayedClaims.map((claim) => {
                       const supportingCount = claim.grouped.supporting.length;
                       const contradictingCount = claim.grouped.contradicting.length;
                       const totalEv = claim.evidences.length;
+                      const kState = (claim as any).knowledge_state;
 
                       // Determine verification badge styling
                       let badgeColor = "bg-muted text-muted-foreground";
@@ -1364,11 +1417,28 @@ function KnowledgePage() {
                             <p className="text-sm font-medium text-foreground leading-snug">
                               "{claim.claim_text}"
                             </p>
-                            {claim.status === "deprecated" && (
-                              <span className="rounded bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive">
-                                Deprecated
-                              </span>
-                            )}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {kState === "conflicted" && (
+                                <span className="rounded bg-rose-500/10 border border-rose-500/30 px-2 py-0.5 text-[10px] font-medium text-rose-400">
+                                  Conflicted
+                                </span>
+                              )}
+                              {kState === "outdated" && (
+                                <span className="rounded bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-[10px] font-medium text-amber-400">
+                                  Outdated
+                                </span>
+                              )}
+                              {kState === "superseded" && (
+                                <span className="rounded bg-purple-500/10 border border-purple-500/30 px-2 py-0.5 text-[10px] font-medium text-purple-400">
+                                  Superseded
+                                </span>
+                              )}
+                              {claim.status === "deprecated" && (
+                                <span className="rounded bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive">
+                                  Deprecated
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           {/* Metadata row: type, verification, confidence, evidence count */}
@@ -1406,7 +1476,7 @@ function KnowledgePage() {
 
                           {/* Action Toolbar */}
                           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/50 pt-2 text-xs">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -1431,6 +1501,32 @@ function KnowledgePage() {
                               >
                                 <Plus className="size-3.5 mr-1" />
                                 Attach Evidence
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs gap-1 text-primary border-primary/30 hover:bg-primary/10"
+                                onClick={() => setSelectedClaimForPath(claim.id)}
+                              >
+                                <HelpCircle className="size-3.5" />
+                                Why Brain knows this
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                                onClick={() => {
+                                  setSelectedHistoryEntity({
+                                    table: "knowledge_claims",
+                                    id: claim.id,
+                                    name: claim.claim_text.length > 35 ? claim.claim_text.slice(0, 35) + "..." : claim.claim_text,
+                                  });
+                                }}
+                              >
+                                <History className="size-3.5" />
+                                History
                               </Button>
                             </div>
 
@@ -2356,6 +2452,41 @@ function KnowledgePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Phase 8: Entity History & Version Timeline Modal */}
+      {selectedHistoryEntity && (
+        <EntityHistoryModal
+          isOpen={!!selectedHistoryEntity}
+          onClose={() => setSelectedHistoryEntity(null)}
+          subjectTable={selectedHistoryEntity.table}
+          subjectId={selectedHistoryEntity.id}
+          entityName={selectedHistoryEntity.name}
+          onEntityUpdated={() => {
+            void queryClient.invalidateQueries({ queryKey: ["nodes"] });
+            void queryClient.invalidateQueries({ queryKey: ["node-claims"] });
+          }}
+        />
+      )}
+
+      {/* Phase 8: Evidence Path Modal ("Why does the Brain know this?") */}
+      {selectedClaimForPath && (
+        <EvidencePathModal
+          isOpen={!!selectedClaimForPath}
+          onClose={() => setSelectedClaimForPath(null)}
+          claimId={selectedClaimForPath}
+        />
+      )}
+
+      {/* Phase 8: Conflict Dashboard Modal */}
+      {showConflictDashboard && (
+        <ConflictDashboardModal
+          isOpen={showConflictDashboard}
+          onClose={() => setShowConflictDashboard(false)}
+          onConflictResolved={() => {
+            void queryClient.invalidateQueries({ queryKey: ["node-claims"] });
+          }}
+        />
+      )}
     </AppShell>
   );
 }
