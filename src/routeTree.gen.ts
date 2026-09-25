@@ -15,6 +15,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as GraphRouteImport } from './routes/graph'
 import { Route as KnowledgeRouteImport } from './routes/knowledge'
+import { Route as ProposalsRouteImport } from './routes/proposals'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SourcesRouteImport } from './routes/sources'
 
@@ -48,6 +49,11 @@ const KnowledgeRoute = KnowledgeRouteImport.update({
   path: '/knowledge',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProposalsRoute = ProposalsRouteImport.update({
+  id: '/proposals',
+  path: '/proposals',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -66,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/chat': typeof ChatRoute
   '/graph': typeof GraphRoute
   '/knowledge': typeof KnowledgeRoute
+  '/proposals': typeof ProposalsRoute
   '/settings': typeof SettingsRoute
   '/sources': typeof SourcesRoute
 }
@@ -76,6 +83,7 @@ export interface FileRoutesByTo {
   '/chat': typeof ChatRoute
   '/graph': typeof GraphRoute
   '/knowledge': typeof KnowledgeRoute
+  '/proposals': typeof ProposalsRoute
   '/settings': typeof SettingsRoute
   '/sources': typeof SourcesRoute
 }
@@ -87,6 +95,7 @@ export interface FileRoutesById {
   '/chat': typeof ChatRoute
   '/graph': typeof GraphRoute
   '/knowledge': typeof KnowledgeRoute
+  '/proposals': typeof ProposalsRoute
   '/settings': typeof SettingsRoute
   '/sources': typeof SourcesRoute
 }
@@ -99,6 +108,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/graph'
     | '/knowledge'
+    | '/proposals'
     | '/settings'
     | '/sources'
   fileRoutesByTo: FileRoutesByTo
@@ -109,6 +119,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/graph'
     | '/knowledge'
+    | '/proposals'
     | '/settings'
     | '/sources'
   id:
@@ -119,6 +130,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/graph'
     | '/knowledge'
+    | '/proposals'
     | '/settings'
     | '/sources'
   fileRoutesById: FileRoutesById
@@ -130,6 +142,7 @@ export interface RootRouteChildren {
   ChatRoute: typeof ChatRoute
   GraphRoute: typeof GraphRoute
   KnowledgeRoute: typeof KnowledgeRoute
+  ProposalsRoute: typeof ProposalsRoute
   SettingsRoute: typeof SettingsRoute
   SourcesRoute: typeof SourcesRoute
 }
@@ -178,6 +191,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KnowledgeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/proposals': {
+      id: '/proposals'
+      path: '/proposals'
+      fullPath: '/proposals'
+      preLoaderRoute: typeof ProposalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -202,6 +222,7 @@ const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRoute,
   GraphRoute: GraphRoute,
   KnowledgeRoute: KnowledgeRoute,
+  ProposalsRoute: ProposalsRoute,
   SettingsRoute: SettingsRoute,
   SourcesRoute: SourcesRoute,
 }

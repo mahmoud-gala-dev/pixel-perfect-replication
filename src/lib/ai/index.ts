@@ -10,3 +10,4 @@ export * from "./chat-service";
 export * from "./providers/base";
 export * from "./providers/openai-compatible";
 export * from "./providers/mock-brain-provider";
+export * from "./extraction";

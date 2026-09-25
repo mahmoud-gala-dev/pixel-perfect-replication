@@ -11,6 +11,7 @@ import {
   BookMarked,
   LogOut,
   Menu,
+  Sparkles,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "@/hooks/useAuth";
@@ -22,6 +23,7 @@ type NavItem = { to: string; label: string; icon: LucideIcon };
 const NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/chat", label: "Chat", icon: MessagesSquare },
+  { to: "/proposals", label: "Proposals", icon: Sparkles },
   { to: "/knowledge", label: "Knowledge", icon: Library },
   { to: "/graph", label: "Graph", icon: Network },
   { to: "/sources", label: "Sources", icon: BookMarked },

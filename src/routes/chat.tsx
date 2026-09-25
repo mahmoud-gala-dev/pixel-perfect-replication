@@ -54,7 +54,8 @@ import {
 import { cn } from "@/lib/utils";
 import { ChatMessageMarkdown } from "@/components/chat/ChatMessageMarkdown";
 import { BrainContextInspector } from "@/components/chat/BrainContextInspector";
-import { ChatService, type ChatResponseContract } from "@/lib/ai";
+import { KnowledgeActivityDrawer } from "@/components/chat/KnowledgeActivityDrawer";
+import { ChatService, KnowledgeExtractionService, type ChatResponseContract } from "@/lib/ai";
 
 export const Route = createFileRoute("/chat")({
   head: () => ({
@@ -86,6 +87,9 @@ export function ChatPage() {
   // Inspector modal state
   const [inspectModalOpen, setInspectModalOpen] = useState(false);
   const [inspectReferences, setInspectReferences] = useState<ChatResponseContract["references"] | null>(null);
+
+  // Knowledge Activity drawer state
+  const [knowledgeActivityOpen, setKnowledgeActivityOpen] = useState(false);
 
   // Rename modal state
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
@@ -248,6 +252,40 @@ export function ChatPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["conversations"] });
       toast.success("Conversation deleted.");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // 8. Fetch Extracted Proposals for Active Conversation
+  const { data: activeProposals = [] } = useQuery({
+    queryKey: ["knowledge-proposals", activeId],
+    enabled: !!activeId,
+    queryFn: async () => {
+      if (!activeId) return [];
+      return await KnowledgeExtractionService.getProposals({ conversationId: activeId });
+    },
+  });
+
+  // 9. Extract Knowledge Candidates Mutation
+  const extractMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeId) return;
+      return await KnowledgeExtractionService.extractFromConversation(activeId);
+    },
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-proposals", activeId] });
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-proposals"] });
+      if (!result) return;
+      if (result.relevance === "CONVERSATIONAL_ONLY" || result.relevance === "USER_PREFERENCE") {
+        toast.info(`Dialogue classified as ${result.relevance.replace("_", " ")}`, {
+          description: "No factual knowledge proposals were extracted.",
+        });
+      } else {
+        toast.success(`Extracted ${result.counts.total_proposals} candidate proposals!`, {
+          description: `${result.counts.entities} concepts, ${result.counts.claims} claims, ${result.counts.relations} relations.`,
+        });
+        setKnowledgeActivityOpen(true);
+      }
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -448,9 +486,49 @@ export function ChatPage() {
               )}
             </div>
 
-            {/* Chat Grounding & Model Settings */}
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 border-r border-border pr-3">
+            {/* Chat Grounding, Model Settings & Knowledge Extraction */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Knowledge Activity Drawer Trigger */}
+              {activeId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setKnowledgeActivityOpen(true)}
+                  className="h-7 gap-1.5 px-2 text-xs border-primary/20 hover:border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary"
+                  title="View detected concepts, claims, and relations"
+                >
+                  <Sparkles className="size-3.5 text-primary" />
+                  <span className="hidden sm:inline font-medium">Activity</span>
+                  {activeProposals.length > 0 && (
+                    <Badge variant="secondary" className="h-4 px-1 text-[10px] bg-primary/20 text-primary font-bold">
+                      {activeProposals.length}
+                    </Badge>
+                  )}
+                </Button>
+              )}
+
+              {/* Extract Knowledge Button */}
+              {activeId && messages.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={extractMutation.isPending}
+                  onClick={() => extractMutation.mutate()}
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  title="Analyze conversation and generate knowledge proposals"
+                >
+                  {extractMutation.isPending ? (
+                    <RotateCcw className="size-3.5 animate-spin text-primary" />
+                  ) : (
+                    <Sparkles className="size-3.5 text-amber-500" />
+                  )}
+                  <span className="hidden md:inline ml-1 font-medium">
+                    {extractMutation.isPending ? "Analyzing..." : "Extract"}
+                  </span>
+                </Button>
+              )}
+
+              <div className="flex items-center gap-2 border-l border-r border-border px-2 sm:px-3">
                 <Switch
                   id="brain-toggle"
                   checked={useBrainContext}
@@ -459,7 +537,7 @@ export function ChatPage() {
                 />
                 <Label htmlFor="brain-toggle" className="text-xs cursor-pointer flex items-center gap-1 font-medium">
                   <Brain className="size-3.5 text-primary" />
-                  <span className="hidden sm:inline">Brain Context</span>
+                  <span className="hidden sm:inline">Brain</span>
                 </Label>
               </div>
 
@@ -744,6 +822,17 @@ export function ChatPage() {
         open={inspectModalOpen}
         onOpenChange={setInspectModalOpen}
         references={inspectReferences}
+      />
+
+      {/* Knowledge Activity Drawer */}
+      <KnowledgeActivityDrawer
+        open={knowledgeActivityOpen}
+        onOpenChange={setKnowledgeActivityOpen}
+        conversationTitle={activeConversation?.title || undefined}
+        conversationId={activeId}
+        proposals={activeProposals}
+        onTriggerExtraction={() => extractMutation.mutate()}
+        isExtracting={extractMutation.isPending}
       />
 
       {/* Rename Conversation Dialog */}

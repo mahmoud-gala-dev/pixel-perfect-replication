@@ -691,6 +691,151 @@ export type Database = {
           },
         ]
       }
+      knowledge_extraction_runs: {
+        Row: {
+          id: string
+          user_id: string
+          conversation_id: string
+          trigger_message_id: string | null
+          status: string
+          relevance: string
+          model: string | null
+          provider: string | null
+          metrics: Json
+          error: string | null
+          started_at: string
+          completed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string
+          conversation_id: string
+          trigger_message_id?: string | null
+          status?: string
+          relevance?: string
+          model?: string | null
+          provider?: string | null
+          metrics?: Json
+          error?: string | null
+          started_at?: string
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          conversation_id?: string
+          trigger_message_id?: string | null
+          status?: string
+          relevance?: string
+          model?: string | null
+          provider?: string | null
+          metrics?: Json
+          error?: string | null
+          started_at?: string
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_extraction_runs_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_extraction_runs_trigger_message_id_fkey"
+            columns: ["trigger_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_proposals: {
+        Row: {
+          id: string
+          extraction_run_id: string | null
+          user_id: string
+          conversation_id: string
+          source_message_id: string | null
+          proposal_type: string
+          status: string
+          payload: Json
+          original_payload: Json | null
+          rejection_reason: string | null
+          extraction_confidence: number | null
+          validation_status: string
+          model: string | null
+          provider: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          extraction_run_id?: string | null
+          user_id?: string
+          conversation_id: string
+          source_message_id?: string | null
+          proposal_type: string
+          status?: string
+          payload?: Json
+          original_payload?: Json | null
+          rejection_reason?: string | null
+          extraction_confidence?: number | null
+          validation_status?: string
+          model?: string | null
+          provider?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          extraction_run_id?: string | null
+          user_id?: string
+          conversation_id?: string
+          source_message_id?: string | null
+          proposal_type?: string
+          status?: string
+          payload?: Json
+          original_payload?: Json | null
+          rejection_reason?: string | null
+          extraction_confidence?: number | null
+          validation_status?: string
+          model?: string | null
+          provider?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_proposals_extraction_run_id_fkey"
+            columns: ["extraction_run_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_extraction_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_proposals_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_proposals_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       knowledge_versions: {
         Row: {
           created_at: string
@@ -1012,6 +1157,12 @@ export type Database = {
         Returns: Json
       }
       archive_conversation: {
+        Args: {
+          p_conversation_id: string
+        }
+        Returns: Json
+      }
+      get_conversation_extraction_summary: {
         Args: {
           p_conversation_id: string
         }
