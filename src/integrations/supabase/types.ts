@@ -124,6 +124,7 @@ export type Database = {
       knowledge_aliases: {
         Row: {
           alias: string
+          alias_type: string
           canonical_alias: string | null
           created_at: string
           created_by: string
@@ -131,10 +132,12 @@ export type Database = {
           language: string | null
           metadata: Json
           node_id: string
+          normalized_alias: string | null
           updated_at: string
         }
         Insert: {
           alias: string
+          alias_type?: string
           canonical_alias?: string | null
           created_at?: string
           created_by?: string
@@ -142,10 +145,12 @@ export type Database = {
           language?: string | null
           metadata?: Json
           node_id: string
+          normalized_alias?: string | null
           updated_at?: string
         }
         Update: {
           alias?: string
+          alias_type?: string
           canonical_alias?: string | null
           created_at?: string
           created_by?: string
@@ -153,6 +158,7 @@ export type Database = {
           language?: string | null
           metadata?: Json
           node_id?: string
+          normalized_alias?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -831,6 +837,19 @@ export type Database = {
           slug: string
         }[]
       }
+      get_node_descendants: {
+        Args: { target_node_id: string }
+        Returns: {
+          depth: number
+          id: string
+          name: string
+          node_type: Database["public"]["Enums"]["node_type"]
+          parent_id: string
+          slug: string
+          status: Database["public"]["Enums"]["knowledge_status"]
+        }[]
+      }
+      get_node_path: { Args: { target_node_id: string }; Returns: Json }
       get_node_subtree: {
         Args: { p_node_id: string }
         Returns: {
@@ -842,8 +861,36 @@ export type Database = {
           slug: string
         }[]
       }
+      normalize_knowledge_name: { Args: { raw_name: string }; Returns: string }
+      resolve_knowledge_node: {
+        Args: {
+          p_name: string
+          p_node_type?: Database["public"]["Enums"]["node_type"]
+          p_parent_id?: string
+        }
+        Returns: Json
+      }
+      safe_create_knowledge_node: {
+        Args: {
+          p_description?: string
+          p_force?: boolean
+          p_metadata?: Json
+          p_name: string
+          p_node_type?: Database["public"]["Enums"]["node_type"]
+          p_parent_id?: string
+        }
+        Returns: Json
+      }
+      safe_move_knowledge_node: {
+        Args: { p_new_parent_id: string; p_node_id: string }
+        Returns: Json
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      validate_node_move: {
+        Args: { p_new_parent_id: string; p_node_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       knowledge_status:
