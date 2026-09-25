@@ -107,6 +107,7 @@ export interface KnowledgeChange {
   source_id?: string | null;
   changed_by: string;
   created_at: string;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface KnowledgeConflict {

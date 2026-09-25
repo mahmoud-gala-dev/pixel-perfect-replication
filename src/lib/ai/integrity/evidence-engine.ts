@@ -218,10 +218,10 @@ export class EvidenceEngine {
     sourceId: string,
     stance: EvidenceStance,
     options: {
-      excerpt?: string | null;
-      locator?: string | null;
-      strength?: number;
-      created_by?: string;
+      excerpt?: string | null | undefined;
+      locator?: string | null | undefined;
+      strength?: number | undefined;
+      created_by?: string | undefined;
     } = {},
   ): EvidenceItem {
     return {
