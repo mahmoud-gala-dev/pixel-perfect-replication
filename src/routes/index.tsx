@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Activity,
   AlertTriangle,
@@ -30,6 +31,11 @@ import {
   Tags,
   Trash2,
   XCircle,
+  Wrench,
+  ListTodo,
+  Play,
+  Pause,
+  Ban,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -69,11 +75,12 @@ export const Route = createFileRoute("/")({
   component: DashboardPage,
 });
 
-type DashboardTab = "overview" | "health" | "gaps" | "conflicts" | "domain" | "activity";
+type DashboardTab = "overview" | "health" | "gaps" | "conflicts" | "domain" | "activity" | "maintenance";
 
 function DashboardPage() {
   const { session } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
   const [globalSearch, setGlobalSearch] = useState("");
@@ -212,6 +219,124 @@ function DashboardPage() {
       if (error) return [];
       return data || [];
     },
+  });
+
+  // 8. Fetch Brain Missions (Phase 11)
+  const { data: brainMissions } = useQuery({
+    queryKey: ["brain-missions-dashboard"],
+    enabled: !!session,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("brain_missions")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (error) return [];
+      return data || [];
+    },
+  });
+
+  // 9. Fetch Brain Observations (Phase 11)
+  const { data: brainObservations } = useQuery({
+    queryKey: ["brain-observations-dashboard"],
+    enabled: !!session,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("brain_observations")
+        .select("*")
+        .order("last_detected_at", { ascending: false })
+        .limit(20);
+      if (error) return [];
+      return data || [];
+    },
+  });
+
+  // 10. Fetch Brain Goals (Phase 11)
+  const { data: brainGoals } = useQuery({
+    queryKey: ["brain-goals-dashboard"],
+    enabled: !!session,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("brain_goals")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (error) return [];
+      return data || [];
+    },
+  });
+
+  // 11. Fetch Brain Alerts (Phase 11)
+  const { data: brainAlerts } = useQuery({
+    queryKey: ["brain-alerts-dashboard"],
+    enabled: !!session,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("brain_alerts")
+        .select("*")
+        .eq("status", "unread")
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (error) return [];
+      return data || [];
+    },
+  });
+
+  // Create Mission Mutation
+  const createMissionMutation = useMutation({
+    mutationFn: async (input: {
+      mission_type: string;
+      title: string;
+      goal: string;
+      target_type?: string;
+      target_id?: string;
+      trigger_observation_id?: string;
+      priority?: string;
+    }) => {
+      const { data, error } = await supabase
+        .from("brain_missions")
+        .insert({
+          mission_type: input.mission_type,
+          title: input.title,
+          goal: input.goal,
+          target_type: input.target_type || null,
+          target_id: input.target_id || null,
+          trigger_observation_id: input.trigger_observation_id || null,
+          priority: input.priority || "MEDIUM",
+          status: "QUEUED",
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success(`Mission started: "${data.title}"`);
+      void queryClient.invalidateQueries({ queryKey: ["brain-missions-dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["brain-observations-dashboard"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // Cancel Mission Mutation
+  const cancelMissionMutation = useMutation({
+    mutationFn: async (missionId: string) => {
+      const { error } = await supabase
+        .from("brain_missions")
+        .update({
+          status: "CANCELLED",
+          outcome: "BLOCKED",
+          outcome_summary: "Cancelled by user.",
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", missionId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Mission cancelled");
+      void queryClient.invalidateQueries({ queryKey: ["brain-missions-dashboard"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 
   // Compute hotspots client-side
@@ -544,6 +669,14 @@ function DashboardPage() {
           onClick={() => setActiveTab("activity")}
         >
           <Activity className="size-3.5 mr-1.5" /> Recent Activity
+        </Button>
+        <Button
+          size="sm"
+          variant={activeTab === "maintenance" ? "secondary" : "ghost"}
+          className="h-8 text-xs font-medium"
+          onClick={() => setActiveTab("maintenance")}
+        >
+          <Sparkles className="size-3.5 mr-1.5 text-primary" /> Brain Maintenance ({brainMissions?.filter((m: any) => m.status === 'RUNNING' || m.status === 'QUEUED').length || 0})
         </Button>
       </div>
 
@@ -1082,6 +1215,249 @@ function DashboardPage() {
           <p className="text-xs text-muted-foreground py-6 text-center">
             View the dedicated <Link to="/activity" className="text-primary underline">Brain Activity</Link> feed for full pagination, transaction diffs, and rollback tools.
           </p>
+        </div>
+      )}
+
+      {/* TAB 7: BRAIN MAINTENANCE & MISSIONS */}
+      {activeTab === "maintenance" && (
+        <div className="space-y-6">
+          {/* Header Panel */}
+          <div className="panel p-5 bg-gradient-to-r from-primary/5 via-card to-card border-border/80">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Sparkles className="size-4 text-primary" /> Brain Self-Improvement & Maintenance Center
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Autonomous observations, governed research missions, revalidation, and non-destructive garbage collection.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Link to="/settings">
+                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+                    <Wrench className="size-3.5" /> Autonomy Settings
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Subgrid: Missions Queue & Observations */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Missions Queue */}
+            <div className="panel p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                    <ListTodo className="size-4 text-primary" /> Active Missions Queue
+                  </h4>
+                  <p className="text-xs text-muted-foreground">Controlled improvement goals running within bounded budgets.</p>
+                </div>
+                <Badge variant="outline" className="font-mono text-xs">
+                  {brainMissions?.length || 0} Total
+                </Badge>
+              </div>
+
+              {(!brainMissions || brainMissions.length === 0) ? (
+                <EmptyState
+                  title="No Missions Running"
+                  description="All improvement missions are complete. Missions are created from observations or gaps."
+                />
+              ) : (
+                <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
+                  {brainMissions.map((m: any) => (
+                    <div key={m.id} className="p-3.5 rounded-lg border border-border/70 bg-card space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold">{m.title}</span>
+                            <Badge
+                              variant="outline"
+                              className={
+                                m.status === "RUNNING"
+                                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 text-[10px]"
+                                  : m.status === "QUEUED"
+                                  ? "border-blue-500/40 bg-blue-500/10 text-blue-400 text-[10px]"
+                                  : m.status === "COMPLETED"
+                                  ? "border-primary/40 bg-primary/10 text-primary text-[10px]"
+                                  : "border-muted-foreground/30 text-muted-foreground text-[10px]"
+                              }
+                            >
+                              {m.status}
+                            </Badge>
+                            <Badge variant="secondary" className="text-[10px] font-mono">
+                              {m.mission_type}
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-1">{m.goal}</p>
+                        </div>
+                        {m.status === "RUNNING" || m.status === "QUEUED" ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="size-7 p-0 text-destructive hover:bg-destructive/10"
+                            onClick={() => cancelMissionMutation.mutate(m.id)}
+                            title="Cancel Mission"
+                          >
+                            <Ban className="size-3.5" />
+                          </Button>
+                        ) : null}
+                      </div>
+
+                      {/* Progress / Budget */}
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40 pt-2">
+                        <span>Agent: <strong className="text-foreground">{m.assigned_agent}</strong></span>
+                        <span>
+                          Steps: <strong>{m.budget_used?.steps ?? 0}</strong> / {m.budget?.max_steps ?? 10}
+                        </span>
+                        {m.outcome && (
+                          <Badge variant="outline" className="text-[10px] font-mono">
+                            Outcome: {m.outcome}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Observations Registry */}
+            <div className="panel p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                    <Activity className="size-4 text-amber-400" /> Deduplicated Observations
+                  </h4>
+                  <p className="text-xs text-muted-foreground">Self-observed gaps, broken sources, missing evidence, and duplicates.</p>
+                </div>
+                <Badge variant="outline" className="font-mono text-xs">
+                  {brainObservations?.length || 0} Observed
+                </Badge>
+              </div>
+
+              {(!brainObservations || brainObservations.length === 0) ? (
+                <EmptyState
+                  title="No Weaknesses Observed"
+                  description="Brain observer has not detected open gaps or structural flaws in current knowledge."
+                />
+              ) : (
+                <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
+                  {brainObservations.map((obs: any) => (
+                    <div key={obs.id} className="p-3.5 rounded-lg border border-border/70 bg-card space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant="outline"
+                              className={
+                                obs.severity === "critical"
+                                  ? "border-red-500/40 bg-red-500/10 text-red-400 text-[10px]"
+                                  : obs.severity === "high"
+                                  ? "border-amber-500/40 bg-amber-500/10 text-amber-400 text-[10px]"
+                                  : "border-blue-500/40 bg-blue-500/10 text-blue-400 text-[10px]"
+                              }
+                            >
+                              {obs.observation_type}
+                            </Badge>
+                            {obs.occurrence_count > 1 && (
+                              <Badge variant="secondary" className="text-[10px] font-mono">
+                                Seen {obs.occurrence_count}×
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs font-medium mt-1.5">{obs.summary}</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs shrink-0 gap-1"
+                          onClick={() => {
+                            createMissionMutation.mutate({
+                              mission_type: obs.observation_type === "KNOWLEDGE_GAP" ? "RESEARCH_GAP" : "FIND_EVIDENCE",
+                              title: `Resolve ${obs.observation_type}: ${obs.target_id}`,
+                              goal: obs.summary,
+                              target_type: obs.target_type,
+                              target_id: obs.target_id,
+                              trigger_observation_id: obs.id,
+                              priority: obs.severity === "high" ? "HIGH" : "MEDIUM",
+                            });
+                          }}
+                        >
+                          <Play className="size-3" /> Mission
+                        </Button>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground flex items-center justify-between pt-1 border-t border-border/40">
+                        <span>Detected by: {obs.detected_by}</span>
+                        <span>First seen: {new Date(obs.first_detected_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Non-Destructive Garbage Collection & Compression Preview */}
+          <div className="panel p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                  <ShieldCheck className="size-4 text-emerald-400" /> Non-Destructive Knowledge Garbage Collector & Compression
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  The Garbage Collector identifies candidate cleanup items for human review. It NEVER executes hard delete operations.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="p-3.5 rounded-lg border border-border/70 bg-card space-y-2">
+                <div className="flex items-center justify-between text-xs font-semibold">
+                  <span>Duplicate Candidates</span>
+                  <Badge variant="outline" className="font-mono text-[10px]">REVIEW REQUIRED</Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Concepts sharing identical slugs, acronyms, or strong lexical overlap are surfaced to Review Queue.
+                </p>
+                <Link to="/proposals">
+                  <Button size="sm" variant="outline" className="w-full h-7 text-xs mt-2">
+                    Review Duplicates <ArrowRight className="size-3 ml-1" />
+                  </Button>
+                </Link>
+              </div>
+
+              <div className="p-3.5 rounded-lg border border-border/70 bg-card space-y-2">
+                <div className="flex items-center justify-between text-xs font-semibold">
+                  <span>Orphan Knowledge</span>
+                  <Badge variant="outline" className="font-mono text-[10px]">INSIGHT ONLY</Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Concepts with zero relations and no parent taxonomy. Connect or leave independent without auto-deletion.
+                </p>
+                <Link to="/graph">
+                  <Button size="sm" variant="outline" className="w-full h-7 text-xs mt-2">
+                    Inspect in Graph <ArrowRight className="size-3 ml-1" />
+                  </Button>
+                </Link>
+              </div>
+
+              <div className="p-3.5 rounded-lg border border-border/70 bg-card space-y-2">
+                <div className="flex items-center justify-between text-xs font-semibold">
+                  <span>Broken Source Repair</span>
+                  <Badge variant="outline" className="font-mono text-[10px]">EVIDENCE PRESERVED</Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  When a documentation URL is unavailable, attached evidence remains intact while an updated source is proposed.
+                </p>
+                <Link to="/sources">
+                  <Button size="sm" variant="outline" className="w-full h-7 text-xs mt-2">
+                    Inspect Sources <ArrowRight className="size-3 ml-1" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </AppShell>

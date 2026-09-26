@@ -2082,6 +2082,480 @@ export type Database = {
         }
         Relationships: []
       }
+      saved_graph_views: {
+        Row: {
+          created_at: string
+          depth: number
+          filters: Json
+          id: string
+          layout: string
+          name: string
+          root_node_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          depth?: number
+          filters?: Json
+          id?: string
+          layout?: string
+          name: string
+          root_node_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          depth?: number
+          filters?: Json
+          id?: string
+          layout?: string
+          name?: string
+          root_node_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      brain_observations: {
+        Row: {
+          confidence: number | null
+          detected_by: string
+          first_detected_at: string
+          id: string
+          last_detected_at: string
+          metadata: Json
+          observation_type: string
+          occurrence_count: number
+          resolved_at: string | null
+          severity: string
+          signals: Json
+          status: string
+          summary: string
+          target_id: string
+          target_type: string
+          user_id: string
+        }
+        Insert: {
+          confidence?: number | null
+          detected_by?: string
+          first_detected_at?: string
+          id?: string
+          last_detected_at?: string
+          metadata?: Json
+          observation_type: string
+          occurrence_count?: number
+          resolved_at?: string | null
+          severity?: string
+          signals?: Json
+          status?: string
+          summary: string
+          target_id: string
+          target_type: string
+          user_id?: string
+        }
+        Update: {
+          confidence?: number | null
+          detected_by?: string
+          first_detected_at?: string
+          id?: string
+          last_detected_at?: string
+          metadata?: Json
+          observation_type?: string
+          occurrence_count?: number
+          resolved_at?: string | null
+          severity?: string
+          signals?: Json
+          status?: string
+          summary?: string
+          target_id?: string
+          target_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      brain_missions: {
+        Row: {
+          assigned_agent: string
+          budget: Json
+          budget_used: Json
+          completed_at: string | null
+          constraints: Json
+          created_at: string
+          description: string | null
+          goal: string
+          id: string
+          metadata: Json
+          mission_type: string
+          outcome: string | null
+          outcome_summary: string | null
+          priority: string
+          risk_level: string
+          reviewed_at: string | null
+          started_at: string | null
+          status: string
+          target_id: string | null
+          target_type: string | null
+          title: string
+          trigger_observation_id: string | null
+          user_id: string
+        }
+        Insert: {
+          assigned_agent?: string
+          budget?: Json
+          budget_used?: Json
+          completed_at?: string | null
+          constraints?: Json
+          created_at?: string
+          description?: string | null
+          goal: string
+          id?: string
+          metadata?: Json
+          mission_type: string
+          outcome?: string | null
+          outcome_summary?: string | null
+          priority?: string
+          risk_level?: string
+          reviewed_at?: string | null
+          started_at?: string | null
+          status?: string
+          target_id?: string | null
+          target_type?: string | null
+          title: string
+          trigger_observation_id?: string | null
+          user_id?: string
+        }
+        Update: {
+          assigned_agent?: string
+          budget?: Json
+          budget_used?: Json
+          completed_at?: string | null
+          constraints?: Json
+          created_at?: string
+          description?: string | null
+          goal?: string
+          id?: string
+          metadata?: Json
+          mission_type?: string
+          outcome?: string | null
+          outcome_summary?: string | null
+          priority?: string
+          risk_level?: string
+          reviewed_at?: string | null
+          started_at?: string | null
+          status?: string
+          target_id?: string | null
+          target_type?: string | null
+          title?: string
+          trigger_observation_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      agent_runs: {
+        Row: {
+          agent_type: string
+          completed_at: string | null
+          created_at: string
+          error: string | null
+          id: string
+          input: Json
+          mission_id: string | null
+          model: string | null
+          provider: string | null
+          reason_summary: string | null
+          started_at: string
+          status: string
+          structured_output: Json
+          usage_metadata: Json
+          user_id: string
+        }
+        Insert: {
+          agent_type: string
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          input?: Json
+          mission_id?: string | null
+          model?: string | null
+          provider?: string | null
+          reason_summary?: string | null
+          started_at?: string
+          status?: string
+          structured_output?: Json
+          usage_metadata?: Json
+          user_id?: string
+        }
+        Update: {
+          agent_type?: string
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          input?: Json
+          mission_id?: string | null
+          model?: string | null
+          provider?: string | null
+          reason_summary?: string | null
+          started_at?: string
+          status?: string
+          structured_output?: Json
+          usage_metadata?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
+      research_runs: {
+        Row: {
+          budget_used: Json
+          completed_at: string | null
+          error: string | null
+          findings_summary: string | null
+          id: string
+          metadata: Json
+          mission_id: string | null
+          research_question: string
+          search_plan: Json
+          sources_checked: Json
+          started_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          budget_used?: Json
+          completed_at?: string | null
+          error?: string | null
+          findings_summary?: string | null
+          id?: string
+          metadata?: Json
+          mission_id?: string | null
+          research_question: string
+          search_plan?: Json
+          sources_checked?: Json
+          started_at?: string
+          status?: string
+          user_id?: string
+        }
+        Update: {
+          budget_used?: Json
+          completed_at?: string | null
+          error?: string | null
+          findings_summary?: string | null
+          id?: string
+          metadata?: Json
+          mission_id?: string | null
+          research_question?: string
+          search_plan?: Json
+          sources_checked?: Json
+          started_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      research_findings: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          evidence_excerpt: string | null
+          finding_type: string
+          id: string
+          metadata: Json
+          related_entity_refs: Json
+          research_run_id: string | null
+          source_id: string | null
+          source_title: string | null
+          source_url: string | null
+          statement: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          evidence_excerpt?: string | null
+          finding_type: string
+          id?: string
+          metadata?: Json
+          related_entity_refs?: Json
+          research_run_id?: string | null
+          source_id?: string | null
+          source_title?: string | null
+          source_url?: string | null
+          statement: string
+          status?: string
+          user_id?: string
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          evidence_excerpt?: string | null
+          finding_type?: string
+          id?: string
+          metadata?: Json
+          related_entity_refs?: Json
+          research_run_id?: string | null
+          source_id?: string | null
+          source_title?: string | null
+          source_url?: string | null
+          statement?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      brain_goals: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          metadata: Json
+          priority: string
+          scope: Json
+          status: string
+          success_criteria: Json
+          target_date: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json
+          priority?: string
+          scope?: Json
+          status?: string
+          success_criteria?: Json
+          target_date?: string | null
+          title: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json
+          priority?: string
+          scope?: Json
+          status?: string
+          success_criteria?: Json
+          target_date?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      brain_alerts: {
+        Row: {
+          acknowledged_at: string | null
+          alert_type: string
+          created_at: string
+          id: string
+          metadata: Json
+          severity: string
+          status: string
+          summary: string
+          target_id: string | null
+          target_type: string | null
+          user_id: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          alert_type: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          severity?: string
+          status?: string
+          summary: string
+          target_id?: string | null
+          target_type?: string | null
+          user_id?: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          alert_type?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          severity?: string
+          status?: string
+          summary?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      knowledge_settings: {
+        Row: {
+          allowed_domains: Json
+          auto_add_aliases: boolean
+          auto_add_claims: boolean
+          auto_add_relations: boolean
+          auto_create_nodes: boolean
+          autonomy_mode: string
+          blocked_domains: Json
+          daily_mission_budget: number
+          learning_mode: string
+          max_ai_calls_per_mission: number
+          max_concurrent_missions: number
+          max_research_calls_per_mission: number
+          max_sources_per_mission: number
+          min_claim_confidence: number
+          min_node_confidence: number
+          min_relation_confidence: number
+          require_evidence_for_claims: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          allowed_domains?: Json
+          auto_add_aliases?: boolean
+          auto_add_claims?: boolean
+          auto_add_relations?: boolean
+          auto_create_nodes?: boolean
+          autonomy_mode?: string
+          blocked_domains?: Json
+          daily_mission_budget?: number
+          learning_mode?: string
+          max_ai_calls_per_mission?: number
+          max_concurrent_missions?: number
+          max_research_calls_per_mission?: number
+          max_sources_per_mission?: number
+          min_claim_confidence?: number
+          min_node_confidence?: number
+          min_relation_confidence?: number
+          require_evidence_for_claims?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          allowed_domains?: Json
+          auto_add_aliases?: boolean
+          auto_add_claims?: boolean
+          auto_add_relations?: boolean
+          auto_create_nodes?: boolean
+          autonomy_mode?: string
+          blocked_domains?: Json
+          daily_mission_budget?: number
+          learning_mode?: string
+          max_ai_calls_per_mission?: number
+          max_concurrent_missions?: number
+          max_research_calls_per_mission?: number
+          max_sources_per_mission?: number
+          min_claim_confidence?: number
+          min_node_confidence?: number
+          min_relation_confidence?: number
+          require_evidence_for_claims?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -2296,6 +2770,24 @@ export type Database = {
       show_trgm: { Args: { "": string }; Returns: string[] }
       validate_node_move: {
         Args: { p_new_parent_id: string; p_node_id: string }
+        Returns: Json
+      }
+      record_brain_observation: {
+        Args: {
+          p_confidence?: number
+          p_detected_by?: string
+          p_metadata?: Json
+          p_observation_type: string
+          p_severity?: string
+          p_signals?: Json
+          p_summary: string
+          p_target_id: string
+          p_target_type: string
+        }
+        Returns: Json
+      }
+      get_brain_maintenance_summary: {
+        Args: Record<PropertyKey, never>
         Returns: Json
       }
     }

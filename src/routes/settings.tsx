@@ -7,7 +7,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Brain, Shield, Sliders, CheckCircle2, Lock } from "lucide-react";
+import { Brain, Shield, Sliders, CheckCircle2, Lock, Sparkles, Activity, Target } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/hooks/useAuth";
@@ -101,8 +101,17 @@ function SettingsPage() {
         min_relation_confidence: Number(brainSettingsData.min_relation_confidence ?? 0.85),
         min_claim_confidence: Number(brainSettingsData.min_claim_confidence ?? 0.9),
       });
+      if ((brainSettingsData as any).autonomy_mode) {
+        setAutonomyMode((brainSettingsData as any).autonomy_mode);
+      }
+      if ((brainSettingsData as any).daily_mission_budget) {
+        setDailyBudget(Number((brainSettingsData as any).daily_mission_budget));
+      }
     }
   }, [brainSettingsData]);
+
+  const [autonomyMode, setAutonomyMode] = useState<string>("SUGGEST");
+  const [dailyBudget, setDailyBudget] = useState<number>(20);
 
   // Save Brain Learning Settings Mutation
   const saveBrainSettings = useMutation({
@@ -119,12 +128,14 @@ function SettingsPage() {
         min_node_confidence: learningSettings.min_node_confidence,
         min_relation_confidence: learningSettings.min_relation_confidence,
         min_claim_confidence: learningSettings.min_claim_confidence,
+        autonomy_mode: autonomyMode,
+        daily_mission_budget: dailyBudget,
         updated_at: new Date().toISOString(),
       });
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Brain learning settings updated");
+      toast.success("Brain learning & autonomy settings updated");
       void queryClient.invalidateQueries({ queryKey: ["brain-learning-settings"] });
     },
     onError: (error: Error) => toast.error(error.message),
@@ -358,6 +369,121 @@ function SettingsPage() {
               className="gap-1.5"
             >
               <CheckCircle2 className="size-4" /> Save Governance Settings
+            </Button>
+          </div>
+        </div>
+
+        {/* Phase 11: Brain Autonomy & Self-Improvement Governance */}
+        <div className="panel space-y-5 p-6">
+          <div className="flex items-center justify-between border-b border-border pb-3">
+            <div className="space-y-0.5">
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                <Sparkles className="size-4 text-primary" />
+                <span>Brain Autonomy & Missions Governance (Phase 11)</span>
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Govern continuous self-improvement, research missions, and budget boundaries. No unrestricted mode exists.
+              </p>
+            </div>
+            <Badge
+              variant="outline"
+              className={
+                autonomyMode === "SAFE_AUTO"
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-mono text-[10px]"
+                  : autonomyMode === "RESEARCH"
+                  ? "border-purple-500/40 bg-purple-500/10 text-purple-400 font-mono text-[10px]"
+                  : autonomyMode === "SUGGEST"
+                  ? "border-blue-500/40 bg-blue-500/10 text-blue-400 font-mono text-[10px]"
+                  : "border-muted-foreground/40 bg-muted/20 text-muted-foreground font-mono text-[10px]"
+              }
+            >
+              MODE: {autonomyMode}
+            </Badge>
+          </div>
+
+          {/* Autonomy Level Selection */}
+          <div className="space-y-3">
+            <Label className="text-xs font-medium">Autonomy Operating Level</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {[
+                {
+                  id: "OFF",
+                  name: "OFF",
+                  desc: "No autonomous observations or missions. Completely manual.",
+                },
+                {
+                  id: "OBSERVE_ONLY",
+                  name: "OBSERVE_ONLY",
+                  desc: "Detect weaknesses, gaps, and conflicts. Create observations only.",
+                },
+                {
+                  id: "SUGGEST",
+                  name: "SUGGEST (Recommended)",
+                  desc: "Propose improvement missions. External research requires manual start.",
+                },
+                {
+                  id: "RESEARCH",
+                  name: "RESEARCH",
+                  desc: "Allowed missions may research external sources. Writes remain governed.",
+                },
+                {
+                  id: "SAFE_AUTO",
+                  name: "SAFE_AUTO",
+                  desc: "Low-risk maintenance operations auto-commit according to policy.",
+                },
+              ].map((opt) => (
+                <div
+                  key={opt.id}
+                  onClick={() => setAutonomyMode(opt.id)}
+                  className={`p-3 rounded-lg border text-left cursor-pointer transition-colors ${
+                    autonomyMode === opt.id
+                      ? "border-primary bg-primary/10 shadow-sm"
+                      : "border-border/70 bg-card hover:bg-muted/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold">{opt.name}</span>
+                    {autonomyMode === opt.id && <CheckCircle2 className="size-3.5 text-primary" />}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{opt.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Cost & Resource Limits */}
+          <div className="space-y-3 border-t border-border pt-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Cost & Resource Safety Limits
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-[11px]">Daily Mission Budget</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={dailyBudget}
+                  onChange={(e) => setDailyBudget(parseInt(e.target.value) || 20)}
+                  className="h-8 text-xs font-mono"
+                />
+                <p className="text-[10px] text-muted-foreground">Maximum missions allowed to run in a 24h window.</p>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px]">Max Steps Per Mission</Label>
+                <Input type="number" readOnly value="10" className="h-8 text-xs font-mono bg-muted/40" />
+                <p className="text-[10px] text-muted-foreground">Hard stop limit preventing runaway loops.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <Button
+              disabled={saveBrainSettings.isPending}
+              onClick={() => saveBrainSettings.mutate()}
+              className="gap-1.5"
+            >
+              <CheckCircle2 className="size-4" /> Save Autonomy & Budget Settings
             </Button>
           </div>
         </div>
