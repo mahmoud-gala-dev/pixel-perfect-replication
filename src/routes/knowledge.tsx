@@ -576,7 +576,7 @@ function KnowledgePage() {
       try {
         const { data, error } = await supabase.rpc("safe_move_knowledge_node", {
           p_node_id: selected.id,
-          p_new_parent_id: targetParentId ?? undefined,
+          p_new_parent_id: (targetParentId ?? null) as string,
         });
         if (!error && data) {
           return;

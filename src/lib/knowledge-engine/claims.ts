@@ -87,7 +87,7 @@ export async function safeCreateClaim(
   // Try RPC safe_create_claim
   try {
     const { data: rpcData, error: rpcError } = await supabase.rpc("safe_create_claim", {
-      p_node_id: input.node_id ?? undefined,
+      p_node_id: (input.node_id ?? null) as string,
       p_statement: val.normalized,
       p_claim_type: input.claim_type ?? "fact",
       p_confidence: input.confidence ?? 1.0,

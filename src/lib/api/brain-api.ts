@@ -246,11 +246,8 @@ export class BrainApi {
           maxNodes: 15,
           maxRelations: 20,
           maxSources: 10,
-          candidateLimit: 25,
-          graphDepth: 2,
-          rerankerLimit: 15,
-          tokenBudget: 3500,
-          contextBudget: 4000,
+          maxGraphHops: 2,
+          maxTokens: 3500,
         },
       }
     );
