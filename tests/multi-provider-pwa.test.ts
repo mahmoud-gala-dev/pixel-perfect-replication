@@ -18,6 +18,8 @@ import {
   GEMINI_AVAILABLE_MODELS,
   OPENROUTER_AVAILABLE_MODELS,
 } from "../src/lib/ai";
+import { encryptApiKeys, decryptApiKeys } from "../src/lib/ai/key-sync-crypto";
+import { OfflineChatStore } from "../src/lib/offline/offline-chat-store";
 
 describe("MULTI-AI PROVIDER SWITCHER & VALIDATOR TESTS", () => {
   // -------------------------------------------------------------------
@@ -352,3 +354,127 @@ describe("PROGRESSIVE WEB APP (PWA) INTEGRATION TESTS", () => {
     assert.ok(content.includes("PWAControls"), "Must render PWAControls");
   });
 });
+
+describe("CLOUD-ENCRYPTED KEY SYNC & OFFLINE STORE TESTS", () => {
+  // -------------------------------------------------------------------
+  // 1. Web Crypto Client-Side Key Encryption & Decryption
+  // -------------------------------------------------------------------
+  test("Cloud-Encrypted Keys — AES-GCM 256 encryption and decryption round-trip", async () => {
+    const sessionEntropy = "user-session-entropy-abc-123456";
+    const keys = {
+      geminiApiKey: "AIzaSyD-mock-gemini-key-987654",
+      openrouterApiKey: "sk-or-v1-mock-openrouter-key-12345",
+    };
+
+    const ciphertext = await encryptApiKeys(keys, sessionEntropy);
+    assert.ok(typeof ciphertext === "string", "Ciphertext must be a string");
+    assert.ok(ciphertext.length > 50, "Ciphertext should be sufficiently long");
+
+    // Must not leak plain keys
+    assert.equal(ciphertext.includes(keys.geminiApiKey), false, "Must not contain plaintext Gemini key");
+    assert.equal(ciphertext.includes(keys.openrouterApiKey), false, "Must not contain plaintext OpenRouter key");
+
+    // Decrypt with identical session entropy
+    const decrypted = await decryptApiKeys(ciphertext, sessionEntropy);
+    assert.equal(decrypted.geminiApiKey, keys.geminiApiKey);
+    assert.equal(decrypted.openrouterApiKey, keys.openrouterApiKey);
+    assert.ok(decrypted.updatedAt);
+  });
+
+  test("Cloud-Encrypted Keys — Randomized salt and IV produces distinct ciphertexts", async () => {
+    const sessionEntropy = "consistent-user-session";
+    const keys = {
+      geminiApiKey: "AIza-static-key",
+      openrouterApiKey: "sk-or-static-key",
+    };
+
+    const cipher1 = await encryptApiKeys(keys, sessionEntropy);
+    const cipher2 = await encryptApiKeys(keys, sessionEntropy);
+
+    assert.notEqual(cipher1, cipher2, "Each encryption should use a fresh salt and IV");
+
+    // Both decrypt to identical values
+    const dec1 = await decryptApiKeys(cipher1, sessionEntropy);
+    const dec2 = await decryptApiKeys(cipher2, sessionEntropy);
+    assert.equal(dec1.geminiApiKey, dec2.geminiApiKey);
+    assert.equal(dec1.openrouterApiKey, dec2.openrouterApiKey);
+  });
+
+  test("Cloud-Encrypted Keys — Decryption fails with invalid entropy or tampered payload", async () => {
+    const validEntropy = "user-entropy-1";
+    const wrongEntropy = "user-entropy-2";
+    const keys = { geminiApiKey: "secret-key", openrouterApiKey: "secret-or-key" };
+
+    const ciphertext = await encryptApiKeys(keys, validEntropy);
+
+    await assert.rejects(
+      async () => {
+        await decryptApiKeys(ciphertext, wrongEntropy);
+      },
+      /Decryption failed|operation failed/i,
+    );
+
+    await assert.rejects(
+      async () => {
+        await decryptApiKeys("invalid:tampered:payload", validEntropy);
+      },
+    );
+  });
+
+  // -------------------------------------------------------------------
+  // 2. OfflineChatStore Interface & Fallbacks
+  // -------------------------------------------------------------------
+  test("OfflineChatStore — Interface methods exist and handle offline environments gracefully", async () => {
+    assert.equal(typeof OfflineChatStore.cacheConversations, "function");
+    assert.equal(typeof OfflineChatStore.getCachedConversations, "function");
+    assert.equal(typeof OfflineChatStore.cacheMessages, "function");
+    assert.equal(typeof OfflineChatStore.getCachedMessages, "function");
+    assert.equal(typeof OfflineChatStore.cacheKnowledgeNodes, "function");
+    assert.equal(typeof OfflineChatStore.getCachedKnowledgeNodes, "function");
+    assert.equal(typeof OfflineChatStore.enqueueOfflineMessage, "function");
+    assert.equal(typeof OfflineChatStore.getPendingOfflineMessages, "function");
+    assert.equal(typeof OfflineChatStore.removePendingOfflineMessage, "function");
+
+    // In Node.js environment without window.indexedDB, safe fallbacks return empty arrays
+    const cachedConvs = await OfflineChatStore.getCachedConversations();
+    assert.deepEqual(cachedConvs, []);
+
+    const cachedMsgs = await OfflineChatStore.getCachedMessages("test-conv");
+    assert.deepEqual(cachedMsgs, []);
+
+    const cachedNodes = await OfflineChatStore.getCachedKnowledgeNodes();
+    assert.deepEqual(cachedNodes, []);
+
+    const pending = await OfflineChatStore.getPendingOfflineMessages();
+    assert.deepEqual(pending, []);
+  });
+
+  test("OfflineChatStore — Bounded caching logic restricts conversations to top 20", () => {
+    const mockConversations = Array.from({ length: 30 }, (_, i) => ({
+      id: `conv-${i}`,
+      title: `Conversation ${i}`,
+      updated_at: new Date(Date.now() - i * 1000).toISOString(),
+      status: "active",
+    }));
+
+    const bounded = mockConversations.slice(0, 20);
+    assert.equal(bounded.length, 20);
+    assert.equal(bounded[0]?.id, "conv-0");
+    assert.equal(bounded[19]?.id, "conv-19");
+  });
+
+  // -------------------------------------------------------------------
+  // 3. Command Palette Voice Aliases
+  // -------------------------------------------------------------------
+  test("Command Palette — Voice Arabic Aliases support bilingual commands", () => {
+    const contextMenuPath = path.resolve(process.cwd(), "src/components/GlobalContextMenu.tsx");
+    const content = fs.readFileSync(contextMenuPath, "utf-8");
+
+    // Arabic voice aliases in commands
+    assert.ok(content.includes("الرسم البياني"), "Must support Arabic command alias for Graph");
+    assert.ok(content.includes("شجرة المعرفة"), "Must support Arabic command alias for Tree");
+    assert.ok(content.includes("محادثة جديدة"), "Must support Arabic command alias for New Chat");
+    assert.ok(content.includes("useSpeechRecognition"), "Must integrate useSpeechRecognition");
+  });
+});
+

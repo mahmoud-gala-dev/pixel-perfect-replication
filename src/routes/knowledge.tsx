@@ -33,6 +33,7 @@ import {
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { OfflineChatStore } from "@/lib/offline/offline-chat-store";
 import { AppShell, EmptyState } from "@/components/AppShell";
 import { KnowledgeTree } from "@/components/KnowledgeTree";
 import { useAuth } from "@/hooks/useAuth";
@@ -200,18 +201,29 @@ function KnowledgePage() {
   const [showConflictDashboard, setShowConflictDashboard] = useState<boolean>(false);
   const [showOutdatedClaims, setShowOutdatedClaims] = useState<boolean>(false);
 
-  // Fetch all nodes
+  // Fetch all nodes (with IndexedDB offline cache fallback)
   const nodesQuery = useQuery({
     queryKey: ["nodes"],
     enabled: !!session,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("knowledge_nodes")
-        .select("*")
-        .is("deleted_at", null)
-        .order("name");
-      if (error) throw error;
-      return data as KnowledgeNode[];
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        return (await OfflineChatStore.getCachedKnowledgeNodes()) as KnowledgeNode[];
+      }
+      try {
+        const { data, error } = await supabase
+          .from("knowledge_nodes")
+          .select("*")
+          .is("deleted_at", null)
+          .order("name");
+        if (error) throw error;
+        const nodes = (data ?? []) as KnowledgeNode[];
+        await OfflineChatStore.cacheKnowledgeNodes(nodes as any);
+        return nodes;
+      } catch (err) {
+        const cached = await OfflineChatStore.getCachedKnowledgeNodes();
+        if (cached && cached.length > 0) return cached as KnowledgeNode[];
+        throw err;
+      }
     },
   });
 

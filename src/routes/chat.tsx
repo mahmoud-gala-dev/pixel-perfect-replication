@@ -29,9 +29,15 @@ import {
   Paperclip,
   HelpCircle,
   AlertTriangle,
+  Mic,
+  MicOff,
+  Globe,
+  WifiOff,
 } from "lucide-react";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { toast } from "sonner";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { OfflineChatStore } from "@/lib/offline/offline-chat-store";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell, EmptyState } from "@/components/AppShell";
 import { useAuth } from "@/hooks/useAuth";
@@ -69,6 +75,10 @@ import {
 import type { AnswerMode, GroundingState } from "@/lib/ai/rag";
 import { KnowledgeEngine } from "@/lib/ai/learning";
 import { BrainUpdateSummaryModal } from "@/components/knowledge/BrainUpdateSummaryModal";
+import type { Tables } from "@/integrations/supabase/types";
+
+type ConversationRow = Tables<"conversations">;
+type MessageRow = Tables<"messages">;
 
 export const Route = createFileRoute("/chat")({
   head: () => ({
@@ -120,6 +130,40 @@ export function ChatPage() {
   const [renameConvId, setRenameConvId] = useState<string | null>(null);
   const [renameTitleDraft, setRenameTitleDraft] = useState("");
 
+  // Offline & Voice Recognition State
+  const [isOffline, setIsOffline] = useState(
+    typeof navigator !== "undefined" ? !navigator.onLine : false,
+  );
+  const [speechLang, setSpeechLang] = useState<"ar-SA" | "en-US">("ar-SA");
+
+  const {
+    isListening: isVoiceListening,
+    setCurrentLang: setVoiceLang,
+    toggleListening: toggleVoiceListening,
+  } = useSpeechRecognition({
+    lang: speechLang,
+    onResult: (spokenText) => {
+      setDraft((prev) => (prev ? `${prev.trim()} ${spokenText.trim()}` : spokenText));
+    },
+  });
+
+  useEffect(() => {
+    const handleOff = () => setIsOffline(true);
+    const handleOn = () => {
+      setIsOffline(false);
+      void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      if (activeId) void queryClient.invalidateQueries({ queryKey: ["messages", activeId] });
+    };
+    window.addEventListener("offline", handleOff);
+    window.addEventListener("online", handleOn);
+    window.addEventListener("knowledge-brain:offline-synced", handleOn);
+    return () => {
+      window.removeEventListener("offline", handleOff);
+      window.removeEventListener("online", handleOn);
+      window.removeEventListener("knowledge-brain:offline-synced", handleOn);
+    };
+  }, [queryClient, activeId]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -128,43 +172,66 @@ export function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // 1. Fetch Conversations
-  const { data: conversations = [], isLoading: loadingConversations } = useQuery({
+  // 1. Fetch Conversations (with IndexedDB offline cache fallback)
+  const { data: conversations = [], isLoading: loadingConversations } = useQuery<ConversationRow[]>({
     queryKey: ["conversations"],
     enabled: !!session,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("conversations")
-        .select("*")
-        .is("deleted_at", null)
-        .order("updated_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
+    queryFn: async (): Promise<ConversationRow[]> => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        return (await OfflineChatStore.getCachedConversations()) as unknown as ConversationRow[];
+      }
+      try {
+        const { data, error } = await supabase
+          .from("conversations")
+          .select("*")
+          .is("deleted_at", null)
+          .order("updated_at", { ascending: false });
+        if (error) throw error;
+        const convList = (data ?? []) as ConversationRow[];
+        await OfflineChatStore.cacheConversations(convList as any);
+        return convList;
+      } catch (err) {
+        const cached = await OfflineChatStore.getCachedConversations();
+        if (cached && cached.length > 0) return cached as unknown as ConversationRow[];
+        throw err;
+      }
     },
   });
 
   // Auto-select latest active conversation on first load if available
   useEffect(() => {
     if (!activeId && conversations.length > 0) {
-      const firstActive = conversations.find((c) => c.status === "active") ?? conversations[0];
+      const firstActive = conversations.find((c: ConversationRow) => c.status === "active") ?? conversations[0];
       if (firstActive) {
         setActiveId(firstActive.id);
       }
     }
   }, [conversations, activeId]);
 
-  // 2. Fetch Messages for active conversation
-  const { data: messages = [], isLoading: loadingMessages } = useQuery({
+  // 2. Fetch Messages for active conversation (with IndexedDB offline cache fallback)
+  const { data: messages = [], isLoading: loadingMessages } = useQuery<MessageRow[]>({
     queryKey: ["messages", activeId],
     enabled: !!activeId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("messages")
-        .select("*")
-        .eq("conversation_id", activeId!)
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return data ?? [];
+    queryFn: async (): Promise<MessageRow[]> => {
+      if (!activeId) return [];
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        return (await OfflineChatStore.getCachedMessages(activeId)) as unknown as MessageRow[];
+      }
+      try {
+        const { data, error } = await supabase
+          .from("messages")
+          .select("*")
+          .eq("conversation_id", activeId)
+          .order("created_at", { ascending: true });
+        if (error) throw error;
+        const msgList = (data ?? []) as MessageRow[];
+        await OfflineChatStore.cacheMessages(activeId, msgList as any);
+        return msgList;
+      } catch (err) {
+        const cached = await OfflineChatStore.getCachedMessages(activeId);
+        if (cached && cached.length > 0) return cached as unknown as MessageRow[];
+        throw err;
+      }
     },
   });
 
@@ -172,7 +239,7 @@ export function ChatPage() {
     scrollToBottom();
   }, [messages, isGenerating]);
 
-  const activeConversation = conversations.find((c) => c.id === activeId);
+  const activeConversation = conversations.find((c: ConversationRow) => c.id === activeId);
 
   // 3. Create Conversation Mutation
   const createConversationMutation = useMutation({
@@ -186,7 +253,7 @@ export function ChatPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // 4. Send Message Mutation (AI Gateway)
+  // 4. Send Message Mutation (AI Gateway & Offline Queue)
   const sendMessageMutation = useMutation({
     mutationFn: async ({
       messageText,
@@ -201,9 +268,54 @@ export function ChatPage() {
 
       // Create conversation if none active
       if (!targetConvId) {
-        const newConv = await ChatService.createConversation(messageText.slice(0, 36));
-        targetConvId = newConv.id;
-        setActiveId(newConv.id);
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          targetConvId = `offline-conv-${Date.now()}`;
+          const newOfflineConv = {
+            id: targetConvId,
+            title: messageText.slice(0, 36),
+            status: "active",
+            updated_at: new Date().toISOString(),
+          };
+          await OfflineChatStore.cacheConversations([newOfflineConv as any]);
+          setActiveId(targetConvId);
+        } else {
+          const newConv = await ChatService.createConversation(messageText.slice(0, 36));
+          targetConvId = newConv.id;
+          setActiveId(newConv.id);
+        }
+      }
+
+      // Check if client is currently offline
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        const queuedId = `offline-msg-${Date.now()}`;
+        await OfflineChatStore.enqueueOfflineMessage({
+          conversationId: targetConvId,
+          message: messageText,
+          options: {
+            use_brain_context: useBrainContext,
+            model: selectedModel,
+            answer_mode: answerMode,
+          },
+        });
+
+        // Add optimistic offline message to local store
+        const existing = await OfflineChatStore.getCachedMessages(targetConvId);
+        const optimisticMsg = {
+          id: queuedId,
+          conversation_id: targetConvId,
+          role: "user" as const,
+          content: messageText,
+          created_at: new Date().toISOString(),
+          metadata: { status: "queued_offline", brain_context_used: false },
+        };
+        await OfflineChatStore.cacheMessages(targetConvId, [...existing, optimisticMsg as any]);
+        queryClient.setQueryData(["messages", targetConvId], (old: any) => [...(old || []), optimisticMsg]);
+
+        toast.info("أنت في وضع عدم الاتصال. تم حفظ رسالتك محلياً وستُرسل تلقائياً عند استعادة الاتصال.", {
+          icon: "📡",
+        });
+
+        return { response: null, targetConvId, isOfflineQueued: true };
       }
 
       setIsGenerating(true);
@@ -223,16 +335,18 @@ export function ChatPage() {
             answer_mode: answerMode,
           },
         });
-        return { response, targetConvId };
+        return { response, targetConvId, isOfflineQueued: false };
       } finally {
         setIsGenerating(false);
       }
     },
     onSuccess: (result) => {
       setDraft("");
-      void queryClient.invalidateQueries({ queryKey: ["messages", result.targetConvId] });
-      void queryClient.invalidateQueries({ queryKey: ["conversations"] });
-      void queryClient.invalidateQueries({ queryKey: ["brain-stats"] });
+      if (!result.isOfflineQueued) {
+        void queryClient.invalidateQueries({ queryKey: ["messages", result.targetConvId] });
+        void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        void queryClient.invalidateQueries({ queryKey: ["brain-stats"] });
+      }
     },
     onError: (err: Error) => {
       setIsGenerating(false);
@@ -404,7 +518,7 @@ export function ChatPage() {
   };
 
   // Filter conversations
-  const filteredConversations = conversations.filter((c) =>
+  const filteredConversations = conversations.filter((c: ConversationRow) =>
     (c.title ?? "Untitled").toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
@@ -414,6 +528,13 @@ export function ChatPage() {
       description="Conversational intelligence with read-only Knowledge Brain grounding."
       actions={
         <div className="flex items-center gap-2">
+          {isOffline && (
+            <Badge variant="outline" className="text-xs gap-1.5 text-amber-500 border-amber-500/40 bg-amber-500/10 py-1 font-normal">
+              <WifiOff className="size-3 animate-pulse" />
+              <span>وضع أوفلاين (IndexedDB)</span>
+            </Badge>
+          )}
+
           {/* Subtle learning indicator in chat */}
           {learningStatus !== "idle" && (
             <div className="flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs">
@@ -534,7 +655,7 @@ export function ChatPage() {
                 {searchQuery ? "No matching chats." : "No conversations yet."}
               </p>
             ) : (
-              filteredConversations.map((conv) => {
+              filteredConversations.map((conv: ConversationRow) => {
                 const isActive = activeId === conv.id;
                 const isArchived = conv.status === "archived";
 
@@ -761,7 +882,7 @@ export function ChatPage() {
             ) : (
               (() => {
                 const makeResponseContract = (
-                  msg: (typeof messages)[0],
+                  msg: MessageRow,
                   meta: Record<string, unknown>,
                   references?: ChatResponseContract["references"],
                 ): ChatResponseContract => {
@@ -788,7 +909,7 @@ export function ChatPage() {
                   };
                 };
 
-                return messages.map((message) => {
+                return messages.map((message: MessageRow) => {
                   const isUser = message.role === "user";
                   const meta = (message.metadata ?? {}) as Record<string, unknown>;
                   const brainContextUsed = Boolean(meta["brain_context_used"]);
@@ -819,6 +940,11 @@ export function ChatPage() {
                               minute: "2-digit",
                             })}
                           </span>
+                          {isUser && meta["status"] === "queued_offline" && (
+                            <Badge variant="outline" className="text-[10px] gap-1 text-amber-500 border-amber-500/30 bg-amber-500/10 py-0">
+                              <WifiOff className="size-2.5" /> معلق في وضع عدم الاتصال
+                            </Badge>
+                          )}
                           {!isUser && brainContextUsed && groundingState && (
                             <button
                               onClick={() => {
@@ -1066,6 +1192,43 @@ export function ChatPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {/* Language switch button for voice recognition */}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      const nextLang = speechLang === "ar-SA" ? "en-US" : "ar-SA";
+                      setSpeechLang(nextLang);
+                      setVoiceLang(nextLang);
+                      toast.info(`Voice recognition set to ${nextLang === "ar-SA" ? "العربية (Arabic)" : "English (US)"}`);
+                    }}
+                    title="تبديل لغة الإدخال الصوتي / Switch Voice Language"
+                  >
+                    <Globe className="size-3.5" />
+                    <span className="font-mono text-[10px] font-semibold">
+                      {speechLang === "ar-SA" ? "AR" : "EN"}
+                    </span>
+                  </Button>
+
+                  {/* Voice dictation button */}
+                  <Button
+                    type="button"
+                    variant={isVoiceListening ? "destructive" : "ghost"}
+                    size="sm"
+                    className={cn(
+                      "h-8 w-8 p-0 transition-all",
+                      isVoiceListening
+                        ? "bg-red-500/20 text-red-600 hover:bg-red-500/30 animate-pulse border border-red-500/40"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                    onClick={() => toggleVoiceListening()}
+                    title={isVoiceListening ? "إيقاف الإملاء الصوتي / Stop voice recording" : "إملاء صوتي / Voice dictation (Web Speech)"}
+                  >
+                    {isVoiceListening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+                  </Button>
+
                   <Button
                     variant="ghost"
                     size="sm"

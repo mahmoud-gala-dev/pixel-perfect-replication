@@ -1,9 +1,10 @@
 // =====================================================================
 // KNOWLEDGE BRAIN — AI PROVIDER SETTINGS CARD
 // Multi-AI provider configuration: Lovable AI, Gemini & OpenRouter
+// End-to-end encrypted cloud synchronization (AES-GCM 256)
 // =====================================================================
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
   Cpu,
@@ -16,11 +17,16 @@ import {
   AlertCircle,
   Loader2,
   Zap,
+  Cloud,
+  CloudOff,
+  Lock,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -28,16 +34,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  useAIProvider,
-} from "@/hooks/useAIProvider";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { useAIProvider } from "@/hooks/useAIProvider";
 import {
   GEMINI_AVAILABLE_MODELS,
   OPENROUTER_AVAILABLE_MODELS,
-  type AIProviderId,
 } from "@/lib/ai/provider-manager";
+import { encryptApiKeys, decryptApiKeys } from "@/lib/ai/key-sync-crypto";
 
 export function AIProviderSettingsCard() {
+  const { user } = useAuth();
   const {
     settings,
     activeProvider,
@@ -55,12 +62,130 @@ export function AIProviderSettingsCard() {
 
   const [testingProvider, setTestingProvider] = useState<"gemini" | "openrouter" | null>(null);
 
-  const handleSaveKeys = () => {
-    updateSettings({
-      geminiApiKey: geminiKeyInput.trim(),
-      openrouterApiKey: openrouterKeyInput.trim(),
-    });
-    toast.success("AI Provider API keys securely saved");
+  // Cloud Sync State
+  const [syncKeysToCloud, setSyncKeysToCloud] = useState(false);
+  const [isCloudSyncLoading, setIsCloudSyncLoading] = useState(false);
+
+  // Fetch initial cloud sync status and decrypt if present
+  useEffect(() => {
+    if (!user) return;
+
+    let isMounted = true;
+    async function loadCloudSyncSettings() {
+      try {
+        const { data, error } = await (supabase.from("knowledge_settings") as any)
+          .select("sync_keys_to_cloud, synced_ai_keys_encrypted")
+          .eq("user_id", user!.id)
+          .maybeSingle();
+
+        if (error || !data) return;
+
+        if (isMounted) {
+          setSyncKeysToCloud(Boolean(data.sync_keys_to_cloud));
+        }
+
+        // If cloud sync is enabled and encrypted payload exists
+        if (data.sync_keys_to_cloud && data.synced_ai_keys_encrypted) {
+          try {
+            const decrypted = await decryptApiKeys(data.synced_ai_keys_encrypted, user!.id);
+            if (isMounted) {
+              if (decrypted.geminiApiKey && !geminiKeyInput) {
+                setGeminiKeyInput(decrypted.geminiApiKey);
+                updateSettings({ geminiApiKey: decrypted.geminiApiKey });
+              }
+              if (decrypted.openrouterApiKey && !openrouterKeyInput) {
+                setOpenrouterKeyInput(decrypted.openrouterApiKey);
+                updateSettings({ openrouterApiKey: decrypted.openrouterApiKey });
+              }
+            }
+          } catch (decryptErr) {
+            console.warn("[CloudSync] Failed to decrypt cloud keys:", decryptErr);
+          }
+        }
+      } catch {
+        // Continue gracefully
+      }
+    }
+
+    void loadCloudSyncSettings();
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
+  const handleSaveKeys = async () => {
+    setIsCloudSyncLoading(true);
+    try {
+      const gKey = geminiKeyInput.trim();
+      const oKey = openrouterKeyInput.trim();
+
+      // 1. Update local storage & manager
+      updateSettings({
+        geminiApiKey: gKey,
+        openrouterApiKey: oKey,
+      });
+
+      // 2. Handle Cloud Sync if enabled
+      if (user && syncKeysToCloud) {
+        if (gKey || oKey) {
+          const encrypted = await encryptApiKeys(
+            {
+              geminiApiKey: gKey,
+              openrouterApiKey: oKey,
+              updatedAt: new Date().toISOString(),
+            },
+            user.id,
+          );
+
+          await (supabase.from("knowledge_settings") as any).upsert({
+            user_id: user.id,
+            sync_keys_to_cloud: true,
+            synced_ai_keys_encrypted: encrypted,
+            updated_at: new Date().toISOString(),
+          });
+          toast.success("AI keys encrypted (AES-GCM 256) & synced across devices");
+        }
+      } else if (user && !syncKeysToCloud) {
+        // Clear cloud sync
+        await (supabase.from("knowledge_settings") as any).upsert({
+          user_id: user.id,
+          sync_keys_to_cloud: false,
+          synced_ai_keys_encrypted: null,
+          updated_at: new Date().toISOString(),
+        });
+        toast.success("AI keys saved locally on this device only");
+      } else {
+        toast.success("AI Provider API keys securely saved");
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to save AI preferences");
+    } finally {
+      setIsCloudSyncLoading(false);
+    }
+  };
+
+  const handleToggleCloudSync = async (enabled: boolean) => {
+    setSyncKeysToCloud(enabled);
+    if (!user) {
+      toast.error("Please sign in to sync encrypted keys to the cloud");
+      return;
+    }
+
+    if (!enabled) {
+      try {
+        await (supabase.from("knowledge_settings") as any).upsert({
+          user_id: user.id,
+          sync_keys_to_cloud: false,
+          synced_ai_keys_encrypted: null,
+          updated_at: new Date().toISOString(),
+        });
+        toast.info("Cloud synchronization disabled. Keys will remain local to this browser.");
+      } catch (err: unknown) {
+        toast.error("Failed to update sync setting");
+      }
+    } else {
+      toast.info("Cloud sync enabled. Click 'Save AI Preferences' to encrypt and upload.");
+    }
   };
 
   const handleTest = async (provider: "gemini" | "openrouter") => {
@@ -427,10 +552,42 @@ export function AIProviderSettingsCard() {
         </div>
       </div>
 
+      {/* Cloud-Encrypted Key Sync Section */}
+      <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2">
+              {syncKeysToCloud ? (
+                <Cloud className="size-4 text-primary" />
+              ) : (
+                <CloudOff className="size-4 text-muted-foreground" />
+              )}
+              <Label className="text-xs font-semibold cursor-pointer">
+                Sync encrypted API keys across my devices
+              </Label>
+              <Badge variant="outline" className="border-primary/30 text-[10px] text-primary gap-1">
+                <Lock className="size-2.5" /> AES-GCM 256
+              </Badge>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Keys are encrypted client-side using Web Crypto API entropy before cloud upload. No plaintext key is ever transmitted or stored on servers.
+            </p>
+          </div>
+          <Switch
+            checked={syncKeysToCloud}
+            onCheckedChange={handleToggleCloudSync}
+          />
+        </div>
+      </div>
+
       {/* Save Button */}
       <div className="flex justify-end gap-2 pt-2 border-t border-border">
-        <Button onClick={handleSaveKeys} className="gap-2">
-          <CheckCircle2 className="size-4" />
+        <Button onClick={handleSaveKeys} disabled={isCloudSyncLoading} className="gap-2">
+          {isCloudSyncLoading ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <CheckCircle2 className="size-4" />
+          )}
           Save AI Preferences & Keys
         </Button>
       </div>

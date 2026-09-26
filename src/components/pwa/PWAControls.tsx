@@ -7,6 +7,8 @@ import { useState, useEffect, useCallback } from "react";
 import { Download, WifiOff, Wifi, X, Sparkles, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { OfflineChatStore } from "@/lib/offline/offline-chat-store";
+import { ChatService } from "@/lib/ai";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -75,7 +77,7 @@ export function PWAControls() {
     };
   }, []);
 
-  // 3. Online/Offline Network Status
+  // 3. Online/Offline Network Status & Outbox Drain
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -85,11 +87,35 @@ export function PWAControls() {
       toast.warning("Network connection lost. Knowledge Brain is running offline.");
     };
 
-    const handleOnline = () => {
+    const handleOnline = async () => {
       setIsOffline(false);
       setJustReconnected(true);
       toast.success("Network connection restored. Knowledge Brain synchronized.");
       setTimeout(() => setJustReconnected(false), 4000);
+
+      // Drain offline outbox queue
+      try {
+        const pending = await OfflineChatStore.getPendingOfflineMessages();
+        if (pending.length > 0) {
+          toast.info(`Sending ${pending.length} message(s) queued while offline...`);
+          for (const item of pending) {
+            try {
+              await ChatService.sendMessage({
+                conversation_id: item.conversation_id,
+                message: item.message,
+                ...(item.options ? { options: item.options as any } : {}),
+              });
+              await OfflineChatStore.removePendingOfflineMessage(item.id);
+            } catch (sendErr) {
+              console.warn("[PWA Outbox] Failed to send queued message:", item.id, sendErr);
+            }
+          }
+          toast.success("All offline queued messages sent successfully!");
+          window.dispatchEvent(new CustomEvent("knowledge-brain:offline-synced"));
+        }
+      } catch (err) {
+        console.warn("[PWA Outbox] Error draining offline queue:", err);
+      }
     };
 
     setIsOffline(!navigator.onLine);

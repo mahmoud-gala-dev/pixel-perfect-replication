@@ -29,7 +29,11 @@ import {
   Layers,
   Trash2,
   Database,
+  Mic,
+  MicOff,
+  Globe,
 } from "lucide-react";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 
 import {
   ContextMenu,
@@ -60,6 +64,7 @@ import {
 import { useAIProvider } from "@/hooks/useAIProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { downloadBrainExport } from "@/lib/portability/download-export";
+import { OfflineChatStore } from "@/lib/offline/offline-chat-store";
 
 interface GlobalContextMenuProps {
   children: ReactNode;
@@ -79,6 +84,20 @@ export function GlobalContextMenu({ children }: GlobalContextMenuProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchedNodes, setSearchedNodes] = useState<QuickNodeItem[]>([]);
   const [isSearchingNodes, setIsSearchingNodes] = useState(false);
+
+  // Voice Input Integration for Command Palette
+  const {
+    isListening,
+    currentLang,
+    setCurrentLang,
+    toggleListening,
+    stopListening,
+  } = useSpeechRecognition({
+    lang: "ar-SA",
+    onResult: (spokenText) => {
+      setSearchQuery(spokenText);
+    },
+  });
 
   // Global Keyboard Listener for Cmd+K / Ctrl+K
   useEffect(() => {
@@ -106,9 +125,16 @@ export function GlobalContextMenu({ children }: GlobalContextMenuProps) {
             .select("id, canonical_name, node_type, status")
             .order("updated_at", { ascending: false })
             .limit(6);
-          if (data) setSearchedNodes(data);
+          if (data && data.length > 0) {
+            setSearchedNodes(data);
+          } else {
+            const cached = await OfflineChatStore.getCachedKnowledgeNodes();
+            if (cached) setSearchedNodes(cached.slice(0, 6) as any);
+          }
         } catch {
           // offline fallback
+          const cached = await OfflineChatStore.getCachedKnowledgeNodes();
+          if (cached) setSearchedNodes(cached.slice(0, 6) as any);
         }
         return;
       }
@@ -121,11 +147,20 @@ export function GlobalContextMenu({ children }: GlobalContextMenuProps) {
           .ilike("canonical_name", `%${searchQuery.trim()}%`)
           .limit(8);
 
-        if (data) {
+        if (data && data.length > 0) {
           setSearchedNodes(data);
+        } else {
+          const cached = await OfflineChatStore.getCachedKnowledgeNodes();
+          const q = searchQuery.trim().toLowerCase();
+          const filtered = cached.filter((n) => n.canonical_name?.toLowerCase().includes(q));
+          setSearchedNodes(filtered.slice(0, 8) as any);
         }
       } catch {
         // graceful offline
+        const cached = await OfflineChatStore.getCachedKnowledgeNodes();
+        const q = searchQuery.trim().toLowerCase();
+        const filtered = cached.filter((n) => n.canonical_name?.toLowerCase().includes(q));
+        setSearchedNodes(filtered.slice(0, 8) as any);
       } finally {
         setIsSearchingNodes(false);
       }
@@ -422,13 +457,59 @@ export function GlobalContextMenu({ children }: GlobalContextMenuProps) {
         </ContextMenuContent>
       </ContextMenu>
 
-      {/* Cmd + K Command Palette Dialog */}
-      <CommandDialog open={commandOpen} onOpenChange={setCommandOpen}>
-        <CommandInput
-          placeholder="Search Brain concepts or type a command... (e.g. 'Gemini', 'Export', 'Check')"
-          value={searchQuery}
-          onValueChange={setSearchQuery}
-        />
+      {/* Cmd + K Command Palette Dialog with Voice Dictation */}
+      <CommandDialog
+        open={commandOpen}
+        onOpenChange={(open) => {
+          if (!open) stopListening();
+          setCommandOpen(open);
+        }}
+      >
+        <div className="relative flex items-center border-b border-border/80">
+          <div className="flex-1">
+            <CommandInput
+              placeholder={
+                isListening
+                  ? `Listening (${currentLang === "ar-SA" ? "العربية" : "English"})... Speak command or concept`
+                  : "Search Brain concepts or type command... (e.g. 'Gemini', 'Export', 'الرسم البياني')"
+              }
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+              className="border-none pr-24"
+            />
+          </div>
+
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 z-10">
+            <button
+              type="button"
+              onClick={() => toggleListening()}
+              className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-all ${
+                isListening
+                  ? "bg-red-500/20 text-red-400 ring-1 ring-red-500 animate-pulse font-medium"
+                  : "bg-muted text-muted-foreground hover:text-foreground"
+              }`}
+              title={isListening ? "Listening... click to stop" : "Voice search (Arabic & English)"}
+            >
+              {isListening ? (
+                <Mic className="size-3.5 text-red-500 animate-bounce" />
+              ) : (
+                <Mic className="size-3.5" />
+              )}
+              <span className="text-[10px] font-mono">
+                {currentLang === "ar-SA" ? "العربية" : "EN"}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentLang(currentLang === "ar-SA" ? "en-US" : "ar-SA")}
+              className="text-[10px] text-muted-foreground hover:text-foreground p-1 rounded hover:bg-muted"
+              title="Toggle speech recognition language"
+            >
+              <Globe className="size-3.5" />
+            </button>
+          </div>
+        </div>
+
         <CommandList className="max-h-[380px]">
           <CommandEmpty>No matching concepts or commands found.</CommandEmpty>
 
@@ -438,10 +519,10 @@ export function GlobalContextMenu({ children }: GlobalContextMenuProps) {
               {searchedNodes.map((node) => (
                 <CommandItem
                   key={node.id}
-                  value={`node ${node.canonical_name} ${node.node_type}`}
+                  value={`node ${node.canonical_name || ""} ${node.node_type}`}
                   onSelect={() => {
                     setCommandOpen(false);
-                    void navigate({ to: "/knowledge", search: { search: node.canonical_name } as any });
+                    void navigate({ to: "/knowledge", search: { search: node.canonical_name || "" } as any });
                   }}
                   className="gap-2.5 cursor-pointer"
                 >
@@ -463,7 +544,7 @@ export function GlobalContextMenu({ children }: GlobalContextMenuProps) {
           {/* AI Provider Switcher commands */}
           <CommandGroup heading="AI Intelligence Providers">
             <CommandItem
-              value="switch ai provider to lovable ai built-in"
+              value="switch ai provider to lovable ai built-in تحويل إلى لوفابل الذكاء الاصطناعي"
               onSelect={() => {
                 switchProvider("lovable");
                 setCommandOpen(false);
@@ -479,7 +560,7 @@ export function GlobalContextMenu({ children }: GlobalContextMenuProps) {
             </CommandItem>
 
             <CommandItem
-              value="switch ai provider to google gemini 2.0 flash"
+              value="switch ai provider to google gemini 2.0 flash تحويل إلى جيميني جوجل"
               onSelect={() => {
                 switchProvider("gemini");
                 setCommandOpen(false);
@@ -495,7 +576,7 @@ export function GlobalContextMenu({ children }: GlobalContextMenuProps) {
             </CommandItem>
 
             <CommandItem
-              value="switch ai provider to openrouter claude gpt4o deepseek"
+              value="switch ai provider to openrouter claude gpt4o deepseek تحويل إلى أوبن روتر كلود"
               onSelect={() => {
                 switchProvider("openrouter");
                 setCommandOpen(false);
@@ -516,7 +597,7 @@ export function GlobalContextMenu({ children }: GlobalContextMenuProps) {
           {/* System Governance & Integrity commands */}
           <CommandGroup heading="System Governance & Tools">
             <CommandItem
-              value="run live integrity check audit graph verification"
+              value="run live integrity check audit graph verification فحص تكامل البيانات سلامة الرسم البياني"
               onSelect={() => {
                 setCommandOpen(false);
                 void handleIntegrityCheck();
@@ -528,7 +609,7 @@ export function GlobalContextMenu({ children }: GlobalContextMenuProps) {
             </CommandItem>
 
             <CommandItem
-              value="run garbage collector purge dangling relations"
+              value="run garbage collector purge dangling relations تنظيف الروابط المهملة جامع القمامة"
               onSelect={() => {
                 setCommandOpen(false);
                 void handleGarbageCollector();
@@ -540,7 +621,7 @@ export function GlobalContextMenu({ children }: GlobalContextMenuProps) {
             </CommandItem>
 
             <CommandItem
-              value="verify orphan nodes check isolated concepts"
+              value="verify orphan nodes check isolated concepts فحص العقد المعزولة"
               onSelect={() => {
                 setCommandOpen(false);
                 void handleVerifyOrphans();
@@ -552,7 +633,7 @@ export function GlobalContextMenu({ children }: GlobalContextMenuProps) {
             </CommandItem>
 
             <CommandItem
-              value="export brain json package backup portability"
+              value="export brain json package backup portability تصدير قاعدة المعرفة باك اب"
               onSelect={() => {
                 setCommandOpen(false);
                 void handleExportBrain();
@@ -564,7 +645,7 @@ export function GlobalContextMenu({ children }: GlobalContextMenuProps) {
             </CommandItem>
 
             <CommandItem
-              value="emergency kill switch halt auto learning"
+              value="emergency kill switch halt auto learning إيقاف الطوارئ مفتاح القفل"
               onSelect={() => {
                 setCommandOpen(false);
                 void handleToggleKillSwitch();
@@ -581,7 +662,7 @@ export function GlobalContextMenu({ children }: GlobalContextMenuProps) {
           {/* Fast Navigation */}
           <CommandGroup heading="Application Navigation">
             <CommandItem
-              value="navigate to graph visual view"
+              value="navigate to graph visual view انتقال إلى الرسم البياني جراف"
               onSelect={() => {
                 setCommandOpen(false);
                 void navigate({ to: "/graph" });
@@ -594,7 +675,7 @@ export function GlobalContextMenu({ children }: GlobalContextMenuProps) {
             </CommandItem>
 
             <CommandItem
-              value="navigate to knowledge explorer list"
+              value="navigate to knowledge explorer list انتقال إلى المستكشف شجرة المعرفة شجرة المفاهيم"
               onSelect={() => {
                 setCommandOpen(false);
                 void navigate({ to: "/knowledge" });
@@ -607,7 +688,7 @@ export function GlobalContextMenu({ children }: GlobalContextMenuProps) {
             </CommandItem>
 
             <CommandItem
-              value="navigate to ai chat conversation"
+              value="navigate to ai chat conversation محادثة جديدة شات محادثة الذكاء الاصطناعي"
               onSelect={() => {
                 setCommandOpen(false);
                 void navigate({ to: "/chat" });
