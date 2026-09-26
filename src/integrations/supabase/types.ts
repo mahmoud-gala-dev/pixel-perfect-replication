@@ -958,42 +958,6 @@ export type Database = {
           },
         ]
       }
-      saved_graph_views: {
-        Row: {
-          created_at: string
-          depth: number
-          filters: Json
-          id: string
-          layout: string
-          name: string
-          root_node_id: string | null
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          depth?: number
-          filters?: Json
-          id?: string
-          layout?: string
-          name: string
-          root_node_id?: string | null
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          depth?: number
-          filters?: Json
-          id?: string
-          layout?: string
-          name?: string
-          root_node_id?: string | null
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       knowledge_nodes: {
         Row: {
           canonical_name: string | null
@@ -2011,6 +1975,50 @@ export type Database = {
           },
         ]
       }
+      saved_graph_views: {
+        Row: {
+          created_at: string
+          depth: number
+          filters: Json
+          id: string
+          layout: string
+          name: string
+          root_node_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          depth?: number
+          filters?: Json
+          id?: string
+          layout?: string
+          name: string
+          root_node_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          depth?: number
+          filters?: Json
+          id?: string
+          layout?: string
+          name?: string
+          root_node_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_graph_views_root_node_id_fkey"
+            columns: ["root_node_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sources: {
         Row: {
           accessed_at: string | null
@@ -2110,14 +2118,31 @@ export type Database = {
         }
         Returns: Json
       }
+      get_brain_dashboard_stats: { Args: never; Returns: Json }
+      get_brain_health_report: { Args: never; Returns: Json }
       get_brain_stats: { Args: never; Returns: Json }
       get_conversation_extraction_summary: {
         Args: { p_conversation_id: string }
         Returns: Json
       }
+      get_domain_dashboard_stats: { Args: { p_node_id: string }; Returns: Json }
       get_graph_neighborhood: {
         Args: { p_depth?: number; p_node_id: string }
         Returns: Json
+      }
+      get_knowledge_hotspots: {
+        Args: { p_limit?: number }
+        Returns: {
+          canonical_name: string
+          claim_count: number
+          in_degree: number
+          name: string
+          node_id: string
+          node_type: Database["public"]["Enums"]["node_type"]
+          out_degree: number
+          slug: string
+          total_degree: number
+        }[]
       }
       get_node_ancestors: {
         Args: { p_node_id: string }
@@ -2149,6 +2174,19 @@ export type Database = {
           id: string
           name: string
           node_type: Database["public"]["Enums"]["node_type"]
+          parent_id: string
+          slug: string
+        }[]
+      }
+      get_orphan_nodes: {
+        Args: { p_limit?: number }
+        Returns: {
+          canonical_name: string
+          created_at: string
+          name: string
+          node_id: string
+          node_type: Database["public"]["Enums"]["node_type"]
+          orphan_reason: string
           parent_id: string
           slug: string
         }[]
@@ -2258,45 +2296,6 @@ export type Database = {
       show_trgm: { Args: { "": string }; Returns: string[] }
       validate_node_move: {
         Args: { p_new_parent_id: string; p_node_id: string }
-        Returns: Json
-      }
-      get_brain_dashboard_stats: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      get_brain_health_report: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      get_knowledge_hotspots: {
-        Args: { p_limit?: number }
-        Returns: {
-          node_id: string
-          name: string
-          canonical_name: string | null
-          slug: string
-          node_type: Database["public"]["Enums"]["node_type"]
-          in_degree: number
-          out_degree: number
-          claim_count: number
-          total_degree: number
-        }[]
-      }
-      get_orphan_nodes: {
-        Args: { p_limit?: number }
-        Returns: {
-          node_id: string
-          name: string
-          canonical_name: string | null
-          slug: string
-          node_type: Database["public"]["Enums"]["node_type"]
-          parent_id: string | null
-          created_at: string
-          orphan_reason: string
-        }[]
-      }
-      get_domain_dashboard_stats: {
-        Args: { p_node_id: string }
         Returns: Json
       }
     }
