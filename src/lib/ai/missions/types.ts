@@ -165,6 +165,7 @@ export interface ResearchRun {
   budget_used?: Record<string, unknown>;
   error?: string | null;
   started_at: string;
+  created_at?: string;
   completed_at?: string | null;
   metadata?: Record<string, unknown>;
 }

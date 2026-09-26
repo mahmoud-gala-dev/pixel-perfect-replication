@@ -2125,6 +2125,7 @@ export type Database = {
           first_detected_at: string
           id: string
           last_detected_at: string
+          created_at: string
           metadata: Json
           observation_type: string
           occurrence_count: number
@@ -2139,6 +2140,7 @@ export type Database = {
         }
         Insert: {
           confidence?: number | null
+          created_at?: string
           detected_by?: string
           first_detected_at?: string
           id?: string
@@ -2157,6 +2159,7 @@ export type Database = {
         }
         Update: {
           confidence?: number | null
+          created_at?: string
           detected_by?: string
           first_detected_at?: string
           id?: string
@@ -2320,12 +2323,14 @@ export type Database = {
           search_plan: Json
           sources_checked: Json
           started_at: string
+          created_at: string
           status: string
           user_id: string
         }
         Insert: {
           budget_used?: Json
           completed_at?: string | null
+          created_at?: string
           error?: string | null
           findings_summary?: string | null
           id?: string
@@ -2341,6 +2346,7 @@ export type Database = {
         Update: {
           budget_used?: Json
           completed_at?: string | null
+          created_at?: string
           error?: string | null
           findings_summary?: string | null
           id?: string

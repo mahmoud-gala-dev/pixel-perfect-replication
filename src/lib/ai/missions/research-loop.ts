@@ -89,6 +89,7 @@ export class ResearchLoop {
       findings_summary: null,
       budget_used: { search_queries: 0, pages_fetched: 0 },
       started_at: now,
+      created_at: now,
       completed_at: null,
       metadata: {},
     };

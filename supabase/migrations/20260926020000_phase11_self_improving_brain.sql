@@ -19,12 +19,16 @@ CREATE TABLE IF NOT EXISTS public.brain_observations (
   detected_by TEXT NOT NULL DEFAULT 'brain_observer',
   first_detected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_detected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   occurrence_count INT NOT NULL DEFAULT 1,
   resolved_at TIMESTAMPTZ,
   metadata JSONB DEFAULT '{}'::jsonb,
   CONSTRAINT brain_observations_severity_valid CHECK (severity IN ('low', 'medium', 'high', 'critical')),
   CONSTRAINT brain_observations_status_valid CHECK (status IN ('open', 'in_progress', 'resolved', 'dismissed'))
 );
+
+ALTER TABLE public.brain_observations
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_brain_observations_dedup
   ON public.brain_observations (user_id, observation_type, target_type, target_id);
@@ -140,9 +144,13 @@ CREATE TABLE IF NOT EXISTS public.research_runs (
   error TEXT,
   started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   metadata JSONB DEFAULT '{}'::jsonb,
   CONSTRAINT research_runs_status_valid CHECK (status IN ('running', 'completed', 'failed', 'insufficient_evidence'))
 );
+
+ALTER TABLE public.research_runs
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 CREATE INDEX IF NOT EXISTS idx_research_runs_mission
   ON public.research_runs (mission_id, created_at DESC);
