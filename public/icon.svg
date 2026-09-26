@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B0F17"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="brainGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60A5FA"/>
+      <stop offset="50%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background rounded rect -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+  <rect width="510" height="510" x="1" y="1" rx="111" fill="none" stroke="#3B82F6" stroke-width="2" stroke-opacity="0.3"/>
+
+  <!-- Glowing Brain Silhouette & Circuit Graph -->
+  <g transform="translate(96, 96) scale(0.625)" filter="url(#glow)">
+    <!-- Circuit lines & nodes -->
+    <path d="M120 180 Q180 120 256 120 T392 180" fill="none" stroke="#3B82F6" stroke-width="8" stroke-dasharray="6 6" opacity="0.6"/>
+    <path d="M100 256 H412" fill="none" stroke="#60A5FA" stroke-width="6" opacity="0.4"/>
+    <path d="M160 360 Q256 420 352 360" fill="none" stroke="#8B5CF6" stroke-width="8" stroke-dasharray="8 8" opacity="0.6"/>
+
+    <!-- Neural Nodes -->
+    <circle cx="120" cy="180" r="14" fill="#60A5FA"/>
+    <circle cx="256" cy="120" r="16" fill="#93C5FD"/>
+    <circle cx="392" cy="180" r="14" fill="#8B5CF6"/>
+    <circle cx="100" cy="256" r="16" fill="#3B82F6"/>
+    <circle cx="412" cy="256" r="16" fill="#A78BFA"/>
+    <circle cx="160" cy="360" r="14" fill="#60A5FA"/>
+    <circle cx="352" cy="360" r="14" fill="#8B5CF6"/>
+    <circle cx="256" cy="256" r="22" fill="#FFFFFF"/>
+
+    <!-- Brain Icon paths -->
+    <path d="M256 96 C200 96 150 130 140 180 C110 190 90 220 90 256 C90 290 110 320 140 332 C150 382 200 416 256 416 C256 360 256 152 256 96 Z"
+          fill="url(#brainGrad)" opacity="0.85"/>
+    <path d="M256 96 C312 96 362 130 372 180 C402 190 422 220 422 256 C422 290 402 320 372 332 C362 382 312 416 256 416 C256 360 256 152 256 96 Z"
+          fill="url(#brainGrad)" opacity="0.95"/>
+    
+    <!-- Center divider glow line -->
+    <line x1="256" y1="100" x2="256" y2="412" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -18,6 +18,8 @@ import type {
   ChatResponseContract,
 } from "./types";
 
+import { AIProviderManager } from "./provider-manager";
+
 // In-memory idempotency cache to protect against rapid duplicate requests
 const idempotencyCache = new Map<string, { timestamp: number; response: ChatResponseContract }>();
 
@@ -37,9 +39,15 @@ export class AIGateway {
     const apiKey = typeof process !== "undefined" ? process.env?.["OPENAI_API_KEY"] : undefined;
     if (apiKey && apiKey.trim().length > 0) {
       this.defaultProvider = new OpenAICompatibleProvider({ apiKey });
-    } else {
-      this.defaultProvider = new MockBrainProvider();
+      return this.defaultProvider;
     }
+
+    // In client browser environment, consult AIProviderManager
+    if (typeof window !== "undefined") {
+      return AIProviderManager.getActiveProviderInstance();
+    }
+
+    this.defaultProvider = new MockBrainProvider();
     return this.defaultProvider;
   }
 

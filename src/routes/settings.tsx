@@ -21,6 +21,7 @@ import {
   type BrainLearningSettings,
   type LearningMode,
 } from "@/lib/ai/learning/types";
+import { AIProviderSettingsCard } from "@/components/settings/AIProviderSettingsCard";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -249,6 +250,9 @@ function SettingsPage() {
             </Button>
           </div>
         </div>
+
+        {/* Multi-AI Provider Switcher & Model Engine */}
+        <AIProviderSettingsCard />
 
         {/* Phase 7: Brain Learning Governance Panel */}
         <div className="panel space-y-5 p-6">
