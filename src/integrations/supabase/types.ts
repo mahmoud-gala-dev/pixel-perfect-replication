@@ -14,6 +14,68 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_runs: {
+        Row: {
+          agent_type: string
+          completed_at: string | null
+          created_at: string
+          error: string | null
+          id: string
+          input: Json | null
+          mission_id: string | null
+          model: string | null
+          provider: string | null
+          reason_summary: string | null
+          started_at: string
+          status: string
+          structured_output: Json | null
+          usage_metadata: Json | null
+          user_id: string
+        }
+        Insert: {
+          agent_type: string
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          input?: Json | null
+          mission_id?: string | null
+          model?: string | null
+          provider?: string | null
+          reason_summary?: string | null
+          started_at?: string
+          status?: string
+          structured_output?: Json | null
+          usage_metadata?: Json | null
+          user_id?: string
+        }
+        Update: {
+          agent_type?: string
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          input?: Json | null
+          mission_id?: string | null
+          model?: string | null
+          provider?: string | null
+          reason_summary?: string | null
+          started_at?: string
+          status?: string
+          structured_output?: Json | null
+          usage_metadata?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_runs_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "brain_missions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       answer_claim_support: {
         Row: {
           answer_claim_id: string
@@ -119,6 +181,391 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      brain_alerts: {
+        Row: {
+          acknowledged_at: string | null
+          alert_type: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          severity: string
+          status: string
+          summary: string
+          target_id: string | null
+          target_type: string | null
+          user_id: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          alert_type: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          severity?: string
+          status?: string
+          summary: string
+          target_id?: string | null
+          target_type?: string | null
+          user_id?: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          alert_type?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          severity?: string
+          status?: string
+          summary?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      brain_audit_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          actor_role: string
+          correlation_id: string | null
+          created_at: string
+          diff: Json | null
+          id: string
+          metadata: Json | null
+          result: string
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          actor_role?: string
+          correlation_id?: string | null
+          created_at?: string
+          diff?: Json | null
+          id?: string
+          metadata?: Json | null
+          result?: string
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          actor_role?: string
+          correlation_id?: string | null
+          created_at?: string
+          diff?: Json | null
+          id?: string
+          metadata?: Json | null
+          result?: string
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: []
+      }
+      brain_connector_resources: {
+        Row: {
+          connector_id: string
+          content_hash: string | null
+          created_at: string
+          external_resource_id: string
+          id: string
+          last_seen_at: string
+          status: string
+          title: string
+          url: string | null
+          user_id: string
+        }
+        Insert: {
+          connector_id: string
+          content_hash?: string | null
+          created_at?: string
+          external_resource_id: string
+          id?: string
+          last_seen_at?: string
+          status?: string
+          title: string
+          url?: string | null
+          user_id?: string
+        }
+        Update: {
+          connector_id?: string
+          content_hash?: string | null
+          created_at?: string
+          external_resource_id?: string
+          id?: string
+          last_seen_at?: string
+          status?: string
+          title?: string
+          url?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brain_connector_resources_connector_id_fkey"
+            columns: ["connector_id"]
+            isOneToOne: false
+            referencedRelation: "brain_connectors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brain_connectors: {
+        Row: {
+          config_encrypted: string | null
+          connector_type: string
+          created_at: string
+          id: string
+          last_synced_at: string | null
+          name: string
+          status: string
+          sync_cursor: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          config_encrypted?: string | null
+          connector_type: string
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          name: string
+          status?: string
+          sync_cursor?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          config_encrypted?: string | null
+          connector_type?: string
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          name?: string
+          status?: string
+          sync_cursor?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      brain_goals: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          metadata: Json | null
+          priority: string
+          scope: Json | null
+          status: string
+          success_criteria: Json | null
+          target_date: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          priority?: string
+          scope?: Json | null
+          status?: string
+          success_criteria?: Json | null
+          target_date?: string | null
+          title: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          priority?: string
+          scope?: Json | null
+          status?: string
+          success_criteria?: Json | null
+          target_date?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      brain_missions: {
+        Row: {
+          assigned_agent: string
+          budget: Json | null
+          budget_used: Json | null
+          completed_at: string | null
+          constraints: Json | null
+          created_at: string
+          description: string | null
+          goal: string
+          id: string
+          metadata: Json | null
+          mission_type: string
+          outcome: string | null
+          outcome_summary: string | null
+          priority: string
+          reviewed_at: string | null
+          risk_level: string
+          started_at: string | null
+          status: string
+          target_id: string | null
+          target_type: string | null
+          title: string
+          trigger_observation_id: string | null
+          user_id: string
+        }
+        Insert: {
+          assigned_agent?: string
+          budget?: Json | null
+          budget_used?: Json | null
+          completed_at?: string | null
+          constraints?: Json | null
+          created_at?: string
+          description?: string | null
+          goal: string
+          id?: string
+          metadata?: Json | null
+          mission_type: string
+          outcome?: string | null
+          outcome_summary?: string | null
+          priority?: string
+          reviewed_at?: string | null
+          risk_level?: string
+          started_at?: string | null
+          status?: string
+          target_id?: string | null
+          target_type?: string | null
+          title: string
+          trigger_observation_id?: string | null
+          user_id?: string
+        }
+        Update: {
+          assigned_agent?: string
+          budget?: Json | null
+          budget_used?: Json | null
+          completed_at?: string | null
+          constraints?: Json | null
+          created_at?: string
+          description?: string | null
+          goal?: string
+          id?: string
+          metadata?: Json | null
+          mission_type?: string
+          outcome?: string | null
+          outcome_summary?: string | null
+          priority?: string
+          reviewed_at?: string | null
+          risk_level?: string
+          started_at?: string | null
+          status?: string
+          target_id?: string | null
+          target_type?: string | null
+          title?: string
+          trigger_observation_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brain_missions_trigger_observation_id_fkey"
+            columns: ["trigger_observation_id"]
+            isOneToOne: false
+            referencedRelation: "brain_observations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brain_observations: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          detected_by: string
+          first_detected_at: string
+          id: string
+          last_detected_at: string
+          metadata: Json | null
+          observation_type: string
+          occurrence_count: number
+          resolved_at: string | null
+          severity: string
+          signals: Json | null
+          status: string
+          summary: string
+          target_id: string
+          target_type: string
+          user_id: string
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          detected_by?: string
+          first_detected_at?: string
+          id?: string
+          last_detected_at?: string
+          metadata?: Json | null
+          observation_type: string
+          occurrence_count?: number
+          resolved_at?: string | null
+          severity?: string
+          signals?: Json | null
+          status?: string
+          summary: string
+          target_id: string
+          target_type: string
+          user_id?: string
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          detected_by?: string
+          first_detected_at?: string
+          id?: string
+          last_detected_at?: string
+          metadata?: Json | null
+          observation_type?: string
+          occurrence_count?: number
+          resolved_at?: string | null
+          severity?: string
+          signals?: Json | null
+          status?: string
+          summary?: string
+          target_id?: string
+          target_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      brain_user_roles: {
+        Row: {
+          created_at: string
+          granted_by: string | null
+          id: string
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       conversations: {
         Row: {
@@ -474,6 +921,7 @@ export type Database = {
           node_id: string | null
           normalized_statement: string | null
           observed_at: string | null
+          scope: string
           source_id: string | null
           status: Database["public"]["Enums"]["knowledge_status"]
           superseded_at: string | null
@@ -499,6 +947,7 @@ export type Database = {
           node_id?: string | null
           normalized_statement?: string | null
           observed_at?: string | null
+          scope?: string
           source_id?: string | null
           status?: Database["public"]["Enums"]["knowledge_status"]
           superseded_at?: string | null
@@ -524,6 +973,7 @@ export type Database = {
           node_id?: string | null
           normalized_statement?: string | null
           observed_at?: string | null
+          scope?: string
           source_id?: string | null
           status?: Database["public"]["Enums"]["knowledge_status"]
           superseded_at?: string | null
@@ -972,6 +1422,7 @@ export type Database = {
           name: string
           node_type: Database["public"]["Enums"]["node_type"]
           parent_id: string | null
+          scope: string
           slug: string
           status: Database["public"]["Enums"]["knowledge_status"]
           summary: string | null
@@ -990,6 +1441,7 @@ export type Database = {
           name: string
           node_type?: Database["public"]["Enums"]["node_type"]
           parent_id?: string | null
+          scope?: string
           slug: string
           status?: Database["public"]["Enums"]["knowledge_status"]
           summary?: string | null
@@ -1008,6 +1460,7 @@ export type Database = {
           name?: string
           node_type?: Database["public"]["Enums"]["node_type"]
           parent_id?: string | null
+          scope?: string
           slug?: string
           status?: Database["public"]["Enums"]["knowledge_status"]
           summary?: string | null
@@ -1527,11 +1980,24 @@ export type Database = {
       }
       knowledge_settings: {
         Row: {
+          allowed_domains: Json | null
           auto_add_aliases: boolean
           auto_add_claims: boolean
           auto_add_relations: boolean
           auto_create_nodes: boolean
+          autonomy_mode: string
+          blocked_domains: Json | null
+          daily_mission_budget: number
+          kill_switch_auto_learning: boolean
+          kill_switch_connectors: boolean
+          kill_switch_embeddings: boolean
+          kill_switch_missions: boolean
+          kill_switch_research: boolean
           learning_mode: string
+          max_ai_calls_per_mission: number
+          max_concurrent_missions: number
+          max_research_calls_per_mission: number
+          max_sources_per_mission: number
           min_claim_confidence: number
           min_node_confidence: number
           min_relation_confidence: number
@@ -1540,11 +2006,24 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          allowed_domains?: Json | null
           auto_add_aliases?: boolean
           auto_add_claims?: boolean
           auto_add_relations?: boolean
           auto_create_nodes?: boolean
+          autonomy_mode?: string
+          blocked_domains?: Json | null
+          daily_mission_budget?: number
+          kill_switch_auto_learning?: boolean
+          kill_switch_connectors?: boolean
+          kill_switch_embeddings?: boolean
+          kill_switch_missions?: boolean
+          kill_switch_research?: boolean
           learning_mode?: string
+          max_ai_calls_per_mission?: number
+          max_concurrent_missions?: number
+          max_research_calls_per_mission?: number
+          max_sources_per_mission?: number
           min_claim_confidence?: number
           min_node_confidence?: number
           min_relation_confidence?: number
@@ -1553,11 +2032,24 @@ export type Database = {
           user_id: string
         }
         Update: {
+          allowed_domains?: Json | null
           auto_add_aliases?: boolean
           auto_add_claims?: boolean
           auto_add_relations?: boolean
           auto_create_nodes?: boolean
+          autonomy_mode?: string
+          blocked_domains?: Json | null
+          daily_mission_budget?: number
+          kill_switch_auto_learning?: boolean
+          kill_switch_connectors?: boolean
+          kill_switch_embeddings?: boolean
+          kill_switch_missions?: boolean
+          kill_switch_research?: boolean
           learning_mode?: string
+          max_ai_calls_per_mission?: number
+          max_concurrent_missions?: number
+          max_research_calls_per_mission?: number
+          max_sources_per_mission?: number
           min_claim_confidence?: number
           min_node_confidence?: number
           min_relation_confidence?: number
@@ -1803,6 +2295,131 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      research_findings: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          evidence_excerpt: string | null
+          finding_type: string
+          id: string
+          metadata: Json | null
+          related_entity_refs: Json | null
+          research_run_id: string | null
+          source_id: string | null
+          source_title: string | null
+          source_url: string | null
+          statement: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          evidence_excerpt?: string | null
+          finding_type: string
+          id?: string
+          metadata?: Json | null
+          related_entity_refs?: Json | null
+          research_run_id?: string | null
+          source_id?: string | null
+          source_title?: string | null
+          source_url?: string | null
+          statement: string
+          status?: string
+          user_id?: string
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          evidence_excerpt?: string | null
+          finding_type?: string
+          id?: string
+          metadata?: Json | null
+          related_entity_refs?: Json | null
+          research_run_id?: string | null
+          source_id?: string | null
+          source_title?: string | null
+          source_url?: string | null
+          statement?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "research_findings_research_run_id_fkey"
+            columns: ["research_run_id"]
+            isOneToOne: false
+            referencedRelation: "research_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "research_findings_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      research_runs: {
+        Row: {
+          budget_used: Json | null
+          completed_at: string | null
+          created_at: string
+          error: string | null
+          findings_summary: string | null
+          id: string
+          metadata: Json | null
+          mission_id: string | null
+          research_question: string
+          search_plan: Json | null
+          sources_checked: Json | null
+          started_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          budget_used?: Json | null
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          findings_summary?: string | null
+          id?: string
+          metadata?: Json | null
+          mission_id?: string | null
+          research_question: string
+          search_plan?: Json | null
+          sources_checked?: Json | null
+          started_at?: string
+          status?: string
+          user_id?: string
+        }
+        Update: {
+          budget_used?: Json | null
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          findings_summary?: string | null
+          id?: string
+          metadata?: Json | null
+          mission_id?: string | null
+          research_question?: string
+          search_plan?: Json | null
+          sources_checked?: Json | null
+          started_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "research_runs_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "brain_missions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       retrieval_feedback: {
         Row: {
@@ -2082,648 +2699,6 @@ export type Database = {
         }
         Relationships: []
       }
-      saved_graph_views: {
-        Row: {
-          created_at: string
-          depth: number
-          filters: Json
-          id: string
-          layout: string
-          name: string
-          root_node_id: string | null
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          depth?: number
-          filters?: Json
-          id?: string
-          layout?: string
-          name: string
-          root_node_id?: string | null
-          updated_at?: string
-          user_id?: string
-        }
-        Update: {
-          created_at?: string
-          depth?: number
-          filters?: Json
-          id?: string
-          layout?: string
-          name?: string
-          root_node_id?: string | null
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      brain_observations: {
-        Row: {
-          confidence: number | null
-          detected_by: string
-          first_detected_at: string
-          id: string
-          last_detected_at: string
-          created_at: string
-          metadata: Json
-          observation_type: string
-          occurrence_count: number
-          resolved_at: string | null
-          severity: string
-          signals: Json
-          status: string
-          summary: string
-          target_id: string
-          target_type: string
-          user_id: string
-        }
-        Insert: {
-          confidence?: number | null
-          created_at?: string
-          detected_by?: string
-          first_detected_at?: string
-          id?: string
-          last_detected_at?: string
-          metadata?: Json
-          observation_type: string
-          occurrence_count?: number
-          resolved_at?: string | null
-          severity?: string
-          signals?: Json
-          status?: string
-          summary: string
-          target_id: string
-          target_type: string
-          user_id?: string
-        }
-        Update: {
-          confidence?: number | null
-          created_at?: string
-          detected_by?: string
-          first_detected_at?: string
-          id?: string
-          last_detected_at?: string
-          metadata?: Json
-          observation_type?: string
-          occurrence_count?: number
-          resolved_at?: string | null
-          severity?: string
-          signals?: Json
-          status?: string
-          summary?: string
-          target_id?: string
-          target_type?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      brain_missions: {
-        Row: {
-          assigned_agent: string
-          budget: Json
-          budget_used: Json
-          completed_at: string | null
-          constraints: Json
-          created_at: string
-          description: string | null
-          goal: string
-          id: string
-          metadata: Json
-          mission_type: string
-          outcome: string | null
-          outcome_summary: string | null
-          priority: string
-          risk_level: string
-          reviewed_at: string | null
-          started_at: string | null
-          status: string
-          target_id: string | null
-          target_type: string | null
-          title: string
-          trigger_observation_id: string | null
-          user_id: string
-        }
-        Insert: {
-          assigned_agent?: string
-          budget?: Json
-          budget_used?: Json
-          completed_at?: string | null
-          constraints?: Json
-          created_at?: string
-          description?: string | null
-          goal: string
-          id?: string
-          metadata?: Json
-          mission_type: string
-          outcome?: string | null
-          outcome_summary?: string | null
-          priority?: string
-          risk_level?: string
-          reviewed_at?: string | null
-          started_at?: string | null
-          status?: string
-          target_id?: string | null
-          target_type?: string | null
-          title: string
-          trigger_observation_id?: string | null
-          user_id?: string
-        }
-        Update: {
-          assigned_agent?: string
-          budget?: Json
-          budget_used?: Json
-          completed_at?: string | null
-          constraints?: Json
-          created_at?: string
-          description?: string | null
-          goal?: string
-          id?: string
-          metadata?: Json
-          mission_type?: string
-          outcome?: string | null
-          outcome_summary?: string | null
-          priority?: string
-          risk_level?: string
-          reviewed_at?: string | null
-          started_at?: string | null
-          status?: string
-          target_id?: string | null
-          target_type?: string | null
-          title?: string
-          trigger_observation_id?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
-      agent_runs: {
-        Row: {
-          agent_type: string
-          completed_at: string | null
-          created_at: string
-          error: string | null
-          id: string
-          input: Json
-          mission_id: string | null
-          model: string | null
-          provider: string | null
-          reason_summary: string | null
-          started_at: string
-          status: string
-          structured_output: Json
-          usage_metadata: Json
-          user_id: string
-        }
-        Insert: {
-          agent_type: string
-          completed_at?: string | null
-          created_at?: string
-          error?: string | null
-          id?: string
-          input?: Json
-          mission_id?: string | null
-          model?: string | null
-          provider?: string | null
-          reason_summary?: string | null
-          started_at?: string
-          status?: string
-          structured_output?: Json
-          usage_metadata?: Json
-          user_id?: string
-        }
-        Update: {
-          agent_type?: string
-          completed_at?: string | null
-          created_at?: string
-          error?: string | null
-          id?: string
-          input?: Json
-          mission_id?: string | null
-          model?: string | null
-          provider?: string | null
-          reason_summary?: string | null
-          started_at?: string
-          status?: string
-          structured_output?: Json
-          usage_metadata?: Json
-          user_id?: string
-        }
-        Relationships: []
-      }
-      research_runs: {
-        Row: {
-          budget_used: Json
-          completed_at: string | null
-          error: string | null
-          findings_summary: string | null
-          id: string
-          metadata: Json
-          mission_id: string | null
-          research_question: string
-          search_plan: Json
-          sources_checked: Json
-          started_at: string
-          created_at: string
-          status: string
-          user_id: string
-        }
-        Insert: {
-          budget_used?: Json
-          completed_at?: string | null
-          created_at?: string
-          error?: string | null
-          findings_summary?: string | null
-          id?: string
-          metadata?: Json
-          mission_id?: string | null
-          research_question: string
-          search_plan?: Json
-          sources_checked?: Json
-          started_at?: string
-          status?: string
-          user_id?: string
-        }
-        Update: {
-          budget_used?: Json
-          completed_at?: string | null
-          created_at?: string
-          error?: string | null
-          findings_summary?: string | null
-          id?: string
-          metadata?: Json
-          mission_id?: string | null
-          research_question?: string
-          search_plan?: Json
-          sources_checked?: Json
-          started_at?: string
-          status?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      research_findings: {
-        Row: {
-          confidence: number | null
-          created_at: string
-          evidence_excerpt: string | null
-          finding_type: string
-          id: string
-          metadata: Json
-          related_entity_refs: Json
-          research_run_id: string | null
-          source_id: string | null
-          source_title: string | null
-          source_url: string | null
-          statement: string
-          status: string
-          user_id: string
-        }
-        Insert: {
-          confidence?: number | null
-          created_at?: string
-          evidence_excerpt?: string | null
-          finding_type: string
-          id?: string
-          metadata?: Json
-          related_entity_refs?: Json
-          research_run_id?: string | null
-          source_id?: string | null
-          source_title?: string | null
-          source_url?: string | null
-          statement: string
-          status?: string
-          user_id?: string
-        }
-        Update: {
-          confidence?: number | null
-          created_at?: string
-          evidence_excerpt?: string | null
-          finding_type?: string
-          id?: string
-          metadata?: Json
-          related_entity_refs?: Json
-          research_run_id?: string | null
-          source_id?: string | null
-          source_title?: string | null
-          source_url?: string | null
-          statement?: string
-          status?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      brain_goals: {
-        Row: {
-          created_at: string
-          description: string | null
-          id: string
-          metadata: Json
-          priority: string
-          scope: Json
-          status: string
-          success_criteria: Json
-          target_date: string | null
-          title: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          description?: string | null
-          id?: string
-          metadata?: Json
-          priority?: string
-          scope?: Json
-          status?: string
-          success_criteria?: Json
-          target_date?: string | null
-          title: string
-          user_id?: string
-        }
-        Update: {
-          created_at?: string
-          description?: string | null
-          id?: string
-          metadata?: Json
-          priority?: string
-          scope?: Json
-          status?: string
-          success_criteria?: Json
-          target_date?: string | null
-          title?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      brain_alerts: {
-        Row: {
-          acknowledged_at: string | null
-          alert_type: string
-          created_at: string
-          id: string
-          metadata: Json
-          severity: string
-          status: string
-          summary: string
-          target_id: string | null
-          target_type: string | null
-          user_id: string
-        }
-        Insert: {
-          acknowledged_at?: string | null
-          alert_type: string
-          created_at?: string
-          id?: string
-          metadata?: Json
-          severity?: string
-          status?: string
-          summary: string
-          target_id?: string | null
-          target_type?: string | null
-          user_id?: string
-        }
-        Update: {
-          acknowledged_at?: string | null
-          alert_type?: string
-          created_at?: string
-          id?: string
-          metadata?: Json
-          severity?: string
-          status?: string
-          summary?: string
-          target_id?: string | null
-          target_type?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
-      knowledge_settings: {
-        Row: {
-          allowed_domains: Json
-          auto_add_aliases: boolean
-          auto_add_claims: boolean
-          auto_add_relations: boolean
-          auto_create_nodes: boolean
-          autonomy_mode: string
-          blocked_domains: Json
-          daily_mission_budget: number
-          kill_switch_auto_learning: boolean
-          kill_switch_missions: boolean
-          kill_switch_research: boolean
-          kill_switch_connectors: boolean
-          kill_switch_embeddings: boolean
-          learning_mode: string
-          max_ai_calls_per_mission: number
-          max_concurrent_missions: number
-          max_research_calls_per_mission: number
-          max_sources_per_mission: number
-          min_claim_confidence: number
-          min_node_confidence: number
-          min_relation_confidence: number
-          require_evidence_for_claims: boolean
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          allowed_domains?: Json
-          auto_add_aliases?: boolean
-          auto_add_claims?: boolean
-          auto_add_relations?: boolean
-          auto_create_nodes?: boolean
-          autonomy_mode?: string
-          blocked_domains?: Json
-          daily_mission_budget?: number
-          kill_switch_auto_learning?: boolean
-          kill_switch_missions?: boolean
-          kill_switch_research?: boolean
-          kill_switch_connectors?: boolean
-          kill_switch_embeddings?: boolean
-          learning_mode?: string
-          max_ai_calls_per_mission?: number
-          max_concurrent_missions?: number
-          max_research_calls_per_mission?: number
-          max_sources_per_mission?: number
-          min_claim_confidence?: number
-          min_node_confidence?: number
-          min_relation_confidence?: number
-          require_evidence_for_claims?: boolean
-          updated_at?: string
-          user_id?: string
-        }
-        Update: {
-          allowed_domains?: Json
-          auto_add_aliases?: boolean
-          auto_add_claims?: boolean
-          auto_add_relations?: boolean
-          auto_create_nodes?: boolean
-          autonomy_mode?: string
-          blocked_domains?: Json
-          daily_mission_budget?: number
-          kill_switch_auto_learning?: boolean
-          kill_switch_missions?: boolean
-          kill_switch_research?: boolean
-          kill_switch_connectors?: boolean
-          kill_switch_embeddings?: boolean
-          learning_mode?: string
-          max_ai_calls_per_mission?: number
-          max_concurrent_missions?: number
-          max_research_calls_per_mission?: number
-          max_sources_per_mission?: number
-          min_claim_confidence?: number
-          min_node_confidence?: number
-          min_relation_confidence?: number
-          require_evidence_for_claims?: boolean
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      brain_user_roles: {
-        Row: {
-          id: string
-          user_id: string
-          role: string
-          granted_by: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          role?: string
-          granted_by?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          role?: string
-          granted_by?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      brain_audit_logs: {
-        Row: {
-          id: string
-          actor_id: string | null
-          actor_role: string
-          action: string
-          target_type: string
-          target_id: string
-          correlation_id: string | null
-          result: string
-          diff: Json
-          metadata: Json
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          actor_id?: string | null
-          actor_role?: string
-          action: string
-          target_type: string
-          target_id: string
-          correlation_id?: string | null
-          result?: string
-          diff?: Json
-          metadata?: Json
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          actor_id?: string | null
-          actor_role?: string
-          action?: string
-          target_type?: string
-          target_id?: string
-          correlation_id?: string | null
-          result?: string
-          diff?: Json
-          metadata?: Json
-          created_at?: string
-        }
-        Relationships: []
-      }
-      brain_connectors: {
-        Row: {
-          id: string
-          user_id: string
-          connector_type: string
-          name: string
-          status: string
-          config_encrypted: string | null
-          sync_cursor: string | null
-          last_synced_at: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id?: string
-          connector_type: string
-          name: string
-          status?: string
-          config_encrypted?: string | null
-          sync_cursor?: string | null
-          last_synced_at?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          connector_type?: string
-          name?: string
-          status?: string
-          config_encrypted?: string | null
-          sync_cursor?: string | null
-          last_synced_at?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      brain_connector_resources: {
-        Row: {
-          id: string
-          connector_id: string
-          user_id: string
-          external_resource_id: string
-          title: string
-          url: string | null
-          content_hash: string | null
-          status: string
-          last_seen_at: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          connector_id: string
-          user_id?: string
-          external_resource_id: string
-          title: string
-          url?: string | null
-          content_hash?: string | null
-          status?: string
-          last_seen_at?: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          connector_id?: string
-          user_id?: string
-          external_resource_id?: string
-          title?: string
-          url?: string | null
-          content_hash?: string | null
-          status?: string
-          last_seen_at?: string
-          created_at?: string
-        }
-        Relationships: []
-      }
     }
     Views: {
       [_ in never]: never
@@ -2733,6 +2708,7 @@ export type Database = {
         Args: { p_conversation_id: string }
         Returns: Json
       }
+      check_brain_data_integrity: { Args: never; Returns: Json }
       commit_knowledge_plan: {
         Args: { p_approved_operation_ids?: string[]; p_plan_id: string }
         Returns: Json
@@ -2762,7 +2738,9 @@ export type Database = {
       }
       get_brain_dashboard_stats: { Args: never; Returns: Json }
       get_brain_health_report: { Args: never; Returns: Json }
+      get_brain_maintenance_summary: { Args: never; Returns: Json }
       get_brain_stats: { Args: never; Returns: Json }
+      get_brain_system_status: { Args: never; Returns: Json }
       get_conversation_extraction_summary: {
         Args: { p_conversation_id: string }
         Returns: Json
@@ -2833,6 +2811,7 @@ export type Database = {
           slug: string
         }[]
       }
+      get_user_highest_role: { Args: { p_user_id?: string }; Returns: string }
       match_knowledge_nodes: {
         Args: {
           match_count?: number
@@ -2851,6 +2830,20 @@ export type Database = {
         }[]
       }
       normalize_knowledge_name: { Args: { raw_name: string }; Returns: string }
+      record_brain_observation: {
+        Args: {
+          p_confidence?: number
+          p_detected_by?: string
+          p_metadata?: Json
+          p_observation_type: string
+          p_severity?: string
+          p_signals?: Json
+          p_summary: string
+          p_target_id: string
+          p_target_type: string
+        }
+        Returns: Json
+      }
       resolve_knowledge_node: {
         Args: {
           p_name: string
@@ -2938,36 +2931,6 @@ export type Database = {
       show_trgm: { Args: { "": string }; Returns: string[] }
       validate_node_move: {
         Args: { p_new_parent_id: string; p_node_id: string }
-        Returns: Json
-      }
-      record_brain_observation: {
-        Args: {
-          p_confidence?: number
-          p_detected_by?: string
-          p_metadata?: Json
-          p_observation_type: string
-          p_severity?: string
-          p_signals?: Json
-          p_summary: string
-          p_target_id: string
-          p_target_type: string
-        }
-        Returns: Json
-      }
-      get_brain_maintenance_summary: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      get_user_highest_role: {
-        Args: { p_user_id?: string }
-        Returns: string
-      }
-      check_brain_data_integrity: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      get_brain_system_status: {
-        Args: Record<PropertyKey, never>
         Returns: Json
       }
     }
