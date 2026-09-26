@@ -194,6 +194,7 @@ export interface BrainLearningSettings {
   min_node_confidence: number;
   min_relation_confidence: number;
   min_claim_confidence: number;
+  solo_direct_commit?: boolean;
 }
 
 export const DEFAULT_BRAIN_SETTINGS: BrainLearningSettings = {
@@ -206,6 +207,7 @@ export const DEFAULT_BRAIN_SETTINGS: BrainLearningSettings = {
   min_node_confidence: 0.9,
   min_relation_confidence: 0.85,
   min_claim_confidence: 0.9,
+  solo_direct_commit: false,
 };
 
 export interface ValidationIssue {

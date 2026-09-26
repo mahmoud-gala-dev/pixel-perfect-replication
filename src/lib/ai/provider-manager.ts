@@ -18,6 +18,7 @@ export interface AIProviderSettings {
   geminiModel: GeminiModel | string;
   openrouterModel: OpenRouterModel | string;
   lovableModel: string;
+  solo_direct_commit?: boolean;
   lastTestedAt?: Record<string, string>;
   testStatus?: Record<string, { success: boolean; latencyMs: number; error?: string }>;
 }
@@ -31,6 +32,7 @@ export const DEFAULT_AI_PROVIDER_SETTINGS: AIProviderSettings = {
   geminiModel: "gemini-2.0-flash",
   openrouterModel: "anthropic/claude-3.5-sonnet",
   lovableModel: "lovable-auto-v1",
+  solo_direct_commit: false,
   lastTestedAt: {},
   testStatus: {},
 };
@@ -102,6 +104,10 @@ class AIProviderManagerClass {
     this.notify();
 
     return this.getSettings();
+  }
+
+  updateSettings(updates: Partial<AIProviderSettings>): AIProviderSettings {
+    return this.saveSettings(updates);
   }
 
   setActiveProvider(providerId: AIProviderId): void {

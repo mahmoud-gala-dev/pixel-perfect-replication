@@ -15,6 +15,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { Toaster } from "@/components/ui/sonner";
 import { GlobalContextMenu } from "@/components/GlobalContextMenu";
 import { PWAControls } from "@/components/pwa/PWAControls";
+import { QuickCaptureModal } from "@/components/knowledge/QuickCaptureModal";
 
 function NotFoundComponent() {
   return (
@@ -146,6 +147,7 @@ function RootComponent() {
         <GlobalContextMenu>
           {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
           <Outlet />
+          <QuickCaptureModal />
           <PWAControls />
           <Toaster position="top-right" />
         </GlobalContextMenu>

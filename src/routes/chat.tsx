@@ -33,11 +33,13 @@ import {
   MicOff,
   Globe,
   WifiOff,
+  Zap,
 } from "lucide-react";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { OfflineChatStore } from "@/lib/offline/offline-chat-store";
+import { AIProviderManager } from "@/lib/ai/provider-manager";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell, EmptyState } from "@/components/AppShell";
 import { useAuth } from "@/hooks/useAuth";
@@ -135,6 +137,11 @@ export function ChatPage() {
     typeof navigator !== "undefined" ? !navigator.onLine : false,
   );
   const [speechLang, setSpeechLang] = useState<"ar-SA" | "en-US">("ar-SA");
+
+  // Solo Fast-Capture Mode State (P0)
+  const [soloDirectCommit, setSoloDirectCommit] = useState<boolean>(() => {
+    return AIProviderManager.getSettings().solo_direct_commit ?? false;
+  });
 
   const {
     isListening: isVoiceListening,
@@ -253,6 +260,83 @@ export function ChatPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  // Solo Fast-Capture Mode Auto-Commit Handler (P0)
+  const triggerSoloAutoCommit = async (convId: string) => {
+    try {
+      const extractionResult = await KnowledgeExtractionService.extractFromConversation(convId);
+      if (
+        !extractionResult ||
+        extractionResult.relevance === "CONVERSATIONAL_ONLY" ||
+        extractionResult.relevance === "USER_PREFERENCE" ||
+        extractionResult.counts.total_proposals === 0
+      ) {
+        return;
+      }
+
+      const resolutionService = new KnowledgeResolutionService(supabase);
+      await resolutionService.resolveExtractionRun(extractionResult.extraction_run_id);
+
+      const engine = new KnowledgeEngine(supabase);
+      const plan = await engine.planExtractionRun(extractionResult.extraction_run_id, convId);
+
+      const nonNoopOps = plan.operations.filter((op) => op.operation_type !== "NO_OP");
+      const isSafeSolo =
+        nonNoopOps.length > 0 &&
+        nonNoopOps.every((op) => {
+          const isAllowedType = ["CREATE_NODE", "CREATE_RELATION", "ADD_ALIAS", "ADD_CLAIM"].includes(
+            op.operation_type,
+          );
+          const isHighConfidence = (op.confidence ?? 0) >= 0.85;
+          const isNotConflicting =
+            !op.payload?.is_conflicting &&
+            op.risk_level !== "high" &&
+            op.status !== "failed" &&
+            op.status !== "rejected";
+          return isAllowedType && isHighConfidence && isNotConflicting;
+        });
+
+      if (isSafeSolo && plan.status !== "needs_review") {
+        await engine.approvePlan(plan.id);
+        const commitRes = await engine.commitPlan(plan.id);
+
+        void queryClient.invalidateQueries({ queryKey: ["nodes"] });
+        void queryClient.invalidateQueries({ queryKey: ["knowledge-proposals", convId] });
+        void queryClient.invalidateQueries({ queryKey: ["knowledge-plans"] });
+        void queryClient.invalidateQueries({ queryKey: ["brain-stats"] });
+
+        const conceptName =
+          nonNoopOps.find((op) => op.operation_type === "CREATE_NODE")?.payload?.name ||
+          nonNoopOps.find((op) => op.operation_type === "CREATE_NODE")?.payload?.canonical_name ||
+          "Concept";
+        const claimsCount =
+          commitRes.summary.added_claims ||
+          nonNoopOps.filter((o) => o.operation_type === "ADD_CLAIM").length;
+
+        toast.success(`⚡ Knowledge Auto-Committed: Added ${conceptName} & ${claimsCount} verified claims.`, {
+          duration: 9000,
+          action: {
+            label: "Undo",
+            onClick: async () => {
+              const undone = await engine.undoPlanCommit(plan.id);
+              if (undone) {
+                void queryClient.invalidateQueries({ queryKey: ["nodes"] });
+                void queryClient.invalidateQueries({ queryKey: ["knowledge-plans"] });
+                void queryClient.invalidateQueries({ queryKey: ["brain-stats"] });
+                toast.success("Auto-committed knowledge reverted.");
+              }
+            },
+          },
+        });
+      } else {
+        toast.info("Knowledge proposals extracted — awaiting manual review in Proposals queue.", {
+          description: "Plan contains conflicts, merges, or requires confirmation.",
+        });
+      }
+    } catch (err) {
+      console.warn("[SoloAutoCommit] Non-blocking auto-commit notice:", err);
+    }
+  };
+
   // 4. Send Message Mutation (AI Gateway & Offline Queue)
   const sendMessageMutation = useMutation({
     mutationFn: async ({
@@ -346,6 +430,10 @@ export function ChatPage() {
         void queryClient.invalidateQueries({ queryKey: ["messages", result.targetConvId] });
         void queryClient.invalidateQueries({ queryKey: ["conversations"] });
         void queryClient.invalidateQueries({ queryKey: ["brain-stats"] });
+
+        if (soloDirectCommit && result.response && result.targetConvId) {
+          void triggerSoloAutoCommit(result.targetConvId);
+        }
       }
     },
     onError: (err: Error) => {
@@ -817,6 +905,31 @@ export function ChatPage() {
                   <span className="hidden sm:inline">Brain</span>
                 </Label>
               </div>
+
+              {/* Solo Fast-Capture Mode Toggle Badge (P0) */}
+              <button
+                type="button"
+                onClick={() => {
+                  const nextVal = !soloDirectCommit;
+                  setSoloDirectCommit(nextVal);
+                  AIProviderManager.saveSettings({ solo_direct_commit: nextVal });
+                  toast.info(
+                    nextVal
+                      ? "⚡ نمط التدوين الفردي المباشر نشط (Solo Auto-Commit)"
+                      : "تم إيقاف نمط التدوين المباشر (Review Required)",
+                  );
+                }}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-all cursor-pointer border",
+                  soloDirectCommit
+                    ? "bg-amber-500/15 text-amber-500 border-amber-500/30 hover:bg-amber-500/25"
+                    : "bg-muted/40 text-muted-foreground border-border hover:text-foreground",
+                )}
+                title="Solo Fast-Capture Mode: Low-risk extractions are auto-committed directly into the Brain without manual review"
+              >
+                <Zap className={cn("size-3.5", soloDirectCommit ? "fill-amber-500 text-amber-500 animate-pulse" : "text-muted-foreground")} />
+                <span className="hidden sm:inline">Solo Auto-Commit</span>
+              </button>
 
               {useBrainContext && (
                 <select

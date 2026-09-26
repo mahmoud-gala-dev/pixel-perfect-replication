@@ -231,6 +231,70 @@ export class KnowledgeEngine {
   }
 
   /**
+   * Reverts an auto-committed knowledge plan and soft-deletes its created entities.
+   */
+  public async undoPlanCommit(planId: string): Promise<boolean> {
+    if (!this.supabase) return true;
+
+    try {
+      const { data: ops } = await this.supabase
+        .from("knowledge_operations")
+        .select("*")
+        .eq("plan_id", planId);
+
+      if (ops && ops.length > 0) {
+        const now = new Date().toISOString();
+        for (const op of ops) {
+          if (op.operation_type === "CREATE_NODE" && op.target_id) {
+            await this.supabase
+              .from("knowledge_nodes")
+              .update({ deleted_at: now, status: "archived" })
+              .eq("id", op.target_id);
+          } else if (op.operation_type === "ADD_CLAIM" && op.target_id) {
+            await this.supabase
+              .from("knowledge_claims")
+              .update({ status: "deprecated", updated_at: now })
+              .eq("id", op.target_id);
+          } else if (op.operation_type === "CREATE_RELATION" && op.target_id) {
+            await this.supabase
+              .from("knowledge_edges")
+              .update({ status: "archived" })
+              .eq("id", op.target_id);
+          } else if (op.operation_type === "ADD_ALIAS" && op.target_id) {
+            await this.supabase
+              .from("knowledge_aliases")
+              .delete()
+              .eq("id", op.target_id);
+          }
+        }
+      }
+
+      await this.supabase
+        .from("knowledge_plans")
+        .update({ status: "rejected", metadata: { reverted_at: new Date().toISOString(), reason: "user_undo" } })
+        .eq("id", planId);
+
+      await this.supabase
+        .from("knowledge_operations")
+        .update({ status: "rejected" })
+        .eq("plan_id", planId);
+
+      return true;
+    } catch (err) {
+      console.error("Failed to undo plan commit:", err);
+      return false;
+    }
+  }
+
+  /**
+   * Static helper to revert an auto-committed plan.
+   */
+  public static async undoPlanCommit(planId: string, customSupabase?: any): Promise<boolean> {
+    const engine = new KnowledgeEngine(customSupabase ?? null);
+    return engine.undoPlanCommit(planId);
+  }
+
+  /**
    * Commits a plan transactionally.
    * If supabase is connected, invokes the atomic commit_knowledge_plan RPC.
    * If running in memory (e.g. tests), executes deterministic canonical mutation.

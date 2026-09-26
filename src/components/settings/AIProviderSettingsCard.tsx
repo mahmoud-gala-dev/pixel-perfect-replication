@@ -41,7 +41,7 @@ import {
   GEMINI_AVAILABLE_MODELS,
   OPENROUTER_AVAILABLE_MODELS,
 } from "@/lib/ai/provider-manager";
-import { encryptApiKeys, decryptApiKeys } from "@/lib/ai/key-sync-crypto";
+import { KeyVault } from "@/lib/crypto/key-vault";
 
 export function AIProviderSettingsCard() {
   const { user } = useAuth();
@@ -74,7 +74,7 @@ export function AIProviderSettingsCard() {
     async function loadCloudSyncSettings() {
       try {
         const { data, error } = await (supabase.from("knowledge_settings") as any)
-          .select("sync_keys_to_cloud, synced_ai_keys_encrypted")
+          .select("sync_keys_to_cloud, synced_ai_keys_encrypted, encrypted_api_keys")
           .eq("user_id", user!.id)
           .maybeSingle();
 
@@ -84,11 +84,11 @@ export function AIProviderSettingsCard() {
           setSyncKeysToCloud(Boolean(data.sync_keys_to_cloud));
         }
 
-        // If cloud sync is enabled and encrypted payload exists
-        if (data.sync_keys_to_cloud && data.synced_ai_keys_encrypted) {
+        // If cloud sync is enabled, load & decrypt from cloud vault
+        if (data.sync_keys_to_cloud) {
           try {
-            const decrypted = await decryptApiKeys(data.synced_ai_keys_encrypted, user!.id);
-            if (isMounted) {
+            const decrypted = await KeyVault.loadFromCloud(user!.id);
+            if (decrypted && isMounted) {
               if (decrypted.geminiApiKey && !geminiKeyInput) {
                 setGeminiKeyInput(decrypted.geminiApiKey);
                 updateSettings({ geminiApiKey: decrypted.geminiApiKey });
@@ -128,31 +128,23 @@ export function AIProviderSettingsCard() {
       // 2. Handle Cloud Sync if enabled
       if (user && syncKeysToCloud) {
         if (gKey || oKey) {
-          const encrypted = await encryptApiKeys(
+          const res = await KeyVault.syncToCloud(
             {
               geminiApiKey: gKey,
               openrouterApiKey: oKey,
-              updatedAt: new Date().toISOString(),
             },
             user.id,
           );
 
-          await (supabase.from("knowledge_settings") as any).upsert({
-            user_id: user.id,
-            sync_keys_to_cloud: true,
-            synced_ai_keys_encrypted: encrypted,
-            updated_at: new Date().toISOString(),
-          });
-          toast.success("AI keys encrypted (AES-GCM 256) & synced across devices");
+          if (res.success) {
+            toast.success("AI keys encrypted (AES-GCM 256) & synced across devices");
+          } else {
+            toast.error(res.error || "Failed to sync encrypted keys");
+          }
         }
       } else if (user && !syncKeysToCloud) {
         // Clear cloud sync
-        await (supabase.from("knowledge_settings") as any).upsert({
-          user_id: user.id,
-          sync_keys_to_cloud: false,
-          synced_ai_keys_encrypted: null,
-          updated_at: new Date().toISOString(),
-        });
+        await KeyVault.clearCloudSync(user.id);
         toast.success("AI keys saved locally on this device only");
       } else {
         toast.success("AI Provider API keys securely saved");

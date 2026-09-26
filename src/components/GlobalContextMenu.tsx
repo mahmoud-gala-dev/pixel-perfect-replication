@@ -594,6 +594,26 @@ export function GlobalContextMenu({ children }: GlobalContextMenuProps) {
 
           <CmdSeparator />
 
+          {/* Quick Actions */}
+          <CommandGroup heading="Quick Actions & Fast-Capture">
+            <CommandItem
+              value="quick capture note claim fact تدوين سريع إضافة حقيقة فكرة ملاحظة"
+              onSelect={() => {
+                setCommandOpen(false);
+                window.dispatchEvent(
+                  new KeyboardEvent("keydown", { key: "n", shiftKey: true, ctrlKey: true }),
+                );
+              }}
+              className="gap-2.5 cursor-pointer"
+            >
+              <Zap className="size-4 text-primary" />
+              <span>Quick Capture Note / Fact (Save to Brain)</span>
+              <CommandShortcut>⌘⇧N</CommandShortcut>
+            </CommandItem>
+          </CommandGroup>
+
+          <CmdSeparator />
+
           {/* System Governance & Integrity commands */}
           <CommandGroup heading="System Governance & Tools">
             <CommandItem
