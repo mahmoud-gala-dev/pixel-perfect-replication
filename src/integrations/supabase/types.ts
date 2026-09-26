@@ -2002,6 +2002,8 @@ export type Database = {
           min_node_confidence: number
           min_relation_confidence: number
           require_evidence_for_claims: boolean
+          sync_keys_to_cloud: boolean
+          synced_ai_keys_encrypted: string | null
           updated_at: string
           user_id: string
         }
@@ -2028,6 +2030,8 @@ export type Database = {
           min_node_confidence?: number
           min_relation_confidence?: number
           require_evidence_for_claims?: boolean
+          sync_keys_to_cloud?: boolean
+          synced_ai_keys_encrypted?: string | null
           updated_at?: string
           user_id: string
         }
@@ -2054,6 +2058,8 @@ export type Database = {
           min_node_confidence?: number
           min_relation_confidence?: number
           require_evidence_for_claims?: boolean
+          sync_keys_to_cloud?: boolean
+          synced_ai_keys_encrypted?: string | null
           updated_at?: string
           user_id?: string
         }
