@@ -14,6 +14,112 @@ export type Database = {
   }
   public: {
     Tables: {
+      answer_claim_support: {
+        Row: {
+          answer_claim_id: string
+          created_at: string
+          evidence_id: string | null
+          id: string
+          knowledge_claim_id: string | null
+          notes: string | null
+          source_id: string | null
+          support_type: string
+        }
+        Insert: {
+          answer_claim_id: string
+          created_at?: string
+          evidence_id?: string | null
+          id?: string
+          knowledge_claim_id?: string | null
+          notes?: string | null
+          source_id?: string | null
+          support_type?: string
+        }
+        Update: {
+          answer_claim_id?: string
+          created_at?: string
+          evidence_id?: string | null
+          id?: string
+          knowledge_claim_id?: string | null
+          notes?: string | null
+          source_id?: string | null
+          support_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "answer_claim_support_answer_claim_id_fkey"
+            columns: ["answer_claim_id"]
+            isOneToOne: false
+            referencedRelation: "answer_claims"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "answer_claim_support_evidence_id_fkey"
+            columns: ["evidence_id"]
+            isOneToOne: false
+            referencedRelation: "evidence"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "answer_claim_support_knowledge_claim_id_fkey"
+            columns: ["knowledge_claim_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_claims"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "answer_claim_support_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      answer_claims: {
+        Row: {
+          assistant_message_id: string | null
+          citation_token: string | null
+          confidence: number | null
+          created_at: string
+          id: string
+          metadata: Json
+          position: number
+          statement: string
+          support_status: string
+        }
+        Insert: {
+          assistant_message_id?: string | null
+          citation_token?: string | null
+          confidence?: number | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          position?: number
+          statement: string
+          support_status?: string
+        }
+        Update: {
+          assistant_message_id?: string | null
+          citation_token?: string | null
+          confidence?: number | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          position?: number
+          statement?: string
+          support_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "answer_claims_assistant_message_id_fkey"
+            columns: ["assistant_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           created_at: string
@@ -256,7 +362,95 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "knowledge_changes_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_changes_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_operations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "knowledge_changes_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_changes_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_chunks: {
+        Row: {
+          chunk_index: number
+          content: string
+          created_at: string
+          embedding: string | null
+          embedding_model: string | null
+          entry_id: string | null
+          id: string
+          metadata: Json
+          node_id: string | null
+          section: string | null
+          source_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          chunk_index?: number
+          content: string
+          created_at?: string
+          embedding?: string | null
+          embedding_model?: string | null
+          entry_id?: string | null
+          id?: string
+          metadata?: Json
+          node_id?: string | null
+          section?: string | null
+          source_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          created_at?: string
+          embedding?: string | null
+          embedding_model?: string | null
+          entry_id?: string | null
+          id?: string
+          metadata?: Json
+          node_id?: string | null
+          section?: string | null
+          source_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_chunks_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_chunks_node_id_fkey"
+            columns: ["node_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_nodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_chunks_source_id_fkey"
             columns: ["source_id"]
             isOneToOne: false
             referencedRelation: "sources"
@@ -274,7 +468,7 @@ export type Database = {
           deprecated_at: string | null
           entry_id: string | null
           id: string
-          knowledge_state: string | null
+          knowledge_state: string
           last_verified_at: string | null
           metadata: Json
           node_id: string | null
@@ -299,7 +493,7 @@ export type Database = {
           deprecated_at?: string | null
           entry_id?: string | null
           id?: string
-          knowledge_state?: string | null
+          knowledge_state?: string
           last_verified_at?: string | null
           metadata?: Json
           node_id?: string | null
@@ -324,7 +518,7 @@ export type Database = {
           deprecated_at?: string | null
           entry_id?: string | null
           id?: string
-          knowledge_state?: string | null
+          knowledge_state?: string
           last_verified_at?: string | null
           metadata?: Json
           node_id?: string | null
@@ -362,6 +556,13 @@ export type Database = {
             referencedRelation: "sources"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "knowledge_claims_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "knowledge_claims"
+            referencedColumns: ["id"]
+          },
         ]
       }
       knowledge_conflicts: {
@@ -370,48 +571,54 @@ export type Database = {
           claim_b_id: string
           conflict_type: string
           created_at: string
+          created_by: string
           detected_by: string
           id: string
-          metadata: Json
-          reason_summary: string
+          metadata: Json | null
+          reason_summary: string | null
           resolution_notes: string | null
           resolution_type: string | null
           resolved_at: string | null
           resolved_by: string | null
           severity: string
           status: string
+          updated_at: string
         }
         Insert: {
           claim_a_id: string
           claim_b_id: string
           conflict_type: string
           created_at?: string
+          created_by?: string
           detected_by?: string
           id?: string
-          metadata?: Json
-          reason_summary: string
+          metadata?: Json | null
+          reason_summary?: string | null
           resolution_notes?: string | null
           resolution_type?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
           severity?: string
           status?: string
+          updated_at?: string
         }
         Update: {
           claim_a_id?: string
           claim_b_id?: string
           conflict_type?: string
           created_at?: string
+          created_by?: string
           detected_by?: string
           id?: string
-          metadata?: Json
-          reason_summary?: string
+          metadata?: Json | null
+          reason_summary?: string | null
           resolution_notes?: string | null
           resolution_type?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
           severity?: string
           status?: string
+          updated_at?: string
         }
         Relationships: [
           {
@@ -619,47 +826,71 @@ export type Database = {
           },
         ]
       }
-      knowledge_chunks: {
+      knowledge_extraction_runs: {
         Row: {
-          chunk_index: number
-          content: string
+          completed_at: string | null
+          conversation_id: string
           created_at: string
-          embedding_model: string | null
-          entry_id: string | null
+          error: string | null
           id: string
-          metadata: Json
-          node_id: string | null
-          section: string | null
-          source_id: string | null
+          metrics: Json
+          model: string | null
+          provider: string | null
+          relevance: string
+          started_at: string
+          status: string
+          trigger_message_id: string | null
           updated_at: string
+          user_id: string
         }
         Insert: {
-          chunk_index: number
-          content: string
+          completed_at?: string | null
+          conversation_id: string
           created_at?: string
-          embedding_model?: string | null
-          entry_id?: string | null
+          error?: string | null
           id?: string
-          metadata?: Json
-          node_id?: string | null
-          section?: string | null
-          source_id?: string | null
+          metrics?: Json
+          model?: string | null
+          provider?: string | null
+          relevance?: string
+          started_at?: string
+          status?: string
+          trigger_message_id?: string | null
           updated_at?: string
+          user_id?: string
         }
         Update: {
-          chunk_index?: number
-          content?: string
+          completed_at?: string | null
+          conversation_id?: string
           created_at?: string
-          embedding_model?: string | null
-          entry_id?: string | null
+          error?: string | null
           id?: string
-          metadata?: Json
-          node_id?: string | null
-          section?: string | null
-          source_id?: string | null
+          metrics?: Json
+          model?: string | null
+          provider?: string | null
+          relevance?: string
+          started_at?: string
+          status?: string
+          trigger_message_id?: string | null
           updated_at?: string
+          user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_extraction_runs_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_extraction_runs_trigger_message_id_fkey"
+            columns: ["trigger_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       knowledge_gaps: {
         Row: {
@@ -710,202 +941,22 @@ export type Database = {
           status?: string
           suggested_action?: string | null
         }
-        Relationships: []
-      }
-      retrieval_runs: {
-        Row: {
-          answer_mode: string
-          assistant_message_id: string | null
-          completed_at: string | null
-          conversation_id: string | null
-          created_at: string
-          duration_ms: number | null
-          grounding_state: string
-          id: string
-          metadata: Json
-          normalized_query: string | null
-          query: string
-          query_type: string
-          started_at: string
-          status: string
-          user_message_id: string | null
-        }
-        Insert: {
-          answer_mode?: string
-          assistant_message_id?: string | null
-          completed_at?: string | null
-          conversation_id?: string | null
-          created_at?: string
-          duration_ms?: number | null
-          grounding_state?: string
-          id?: string
-          metadata?: Json
-          normalized_query?: string | null
-          query: string
-          query_type?: string
-          started_at?: string
-          status?: string
-          user_message_id?: string | null
-        }
-        Update: {
-          answer_mode?: string
-          assistant_message_id?: string | null
-          completed_at?: string | null
-          conversation_id?: string | null
-          created_at?: string
-          duration_ms?: number | null
-          grounding_state?: string
-          id?: string
-          metadata?: Json
-          normalized_query?: string | null
-          query?: string
-          query_type?: string
-          started_at?: string
-          status?: string
-          user_message_id?: string | null
-        }
-        Relationships: []
-      }
-      retrieval_items: {
-        Row: {
-          created_at: string
-          id: string
-          object_id: string
-          object_type: string
-          rank: number
-          retrieval_method: string
-          retrieval_run_id: string
-          score: number
-          score_breakdown: Json
-          selected_for_context: boolean
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          object_id: string
-          object_type: string
-          rank?: number
-          retrieval_method: string
-          retrieval_run_id: string
-          score?: number
-          score_breakdown?: Json
-          selected_for_context?: boolean
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          object_id?: string
-          object_type?: string
-          rank?: number
-          retrieval_method?: string
-          retrieval_run_id?: string
-          score?: number
-          score_breakdown?: Json
-          selected_for_context?: boolean
-        }
-        Relationships: []
-      }
-      retrieval_feedback: {
-        Row: {
-          assistant_message_id: string
-          created_at: string
-          feedback_type: string | null
-          id: string
-          notes: string | null
-          rating: string
-          retrieval_run_id: string
-          user_id: string | null
-        }
-        Insert: {
-          assistant_message_id: string
-          created_at?: string
-          feedback_type?: string | null
-          id?: string
-          notes?: string | null
-          rating: string
-          retrieval_run_id: string
-          user_id?: string | null
-        }
-        Update: {
-          assistant_message_id?: string
-          created_at?: string
-          feedback_type?: string | null
-          id?: string
-          notes?: string | null
-          rating?: string
-          retrieval_run_id?: string
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-      answer_claims: {
-        Row: {
-          assistant_message_id: string | null
-          citation_token: string | null
-          confidence: number | null
-          created_at: string
-          id: string
-          metadata: Json
-          position: number
-          statement: string
-          support_status: string
-        }
-        Insert: {
-          assistant_message_id?: string | null
-          citation_token?: string | null
-          confidence?: number | null
-          created_at?: string
-          id?: string
-          metadata?: Json
-          position?: number
-          statement: string
-          support_status?: string
-        }
-        Update: {
-          assistant_message_id?: string | null
-          citation_token?: string | null
-          confidence?: number | null
-          created_at?: string
-          id?: string
-          metadata?: Json
-          position?: number
-          statement?: string
-          support_status?: string
-        }
-        Relationships: []
-      }
-      answer_claim_support: {
-        Row: {
-          answer_claim_id: string
-          created_at: string
-          evidence_id: string | null
-          id: string
-          knowledge_claim_id: string | null
-          notes: string | null
-          source_id: string | null
-          support_type: string
-        }
-        Insert: {
-          answer_claim_id: string
-          created_at?: string
-          evidence_id?: string | null
-          id?: string
-          knowledge_claim_id?: string | null
-          notes?: string | null
-          source_id?: string | null
-          support_type?: string
-        }
-        Update: {
-          answer_claim_id?: string
-          created_at?: string
-          evidence_id?: string | null
-          id?: string
-          knowledge_claim_id?: string | null
-          notes?: string | null
-          source_id?: string | null
-          support_type?: string
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_gaps_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_gaps_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       knowledge_nodes: {
         Row: {
@@ -914,8 +965,8 @@ export type Database = {
           created_by: string
           deleted_at: string | null
           description: string | null
-          embedding_status: string | null
           embedded_at: string | null
+          embedding_status: string | null
           id: string
           metadata: Json
           name: string
@@ -932,8 +983,8 @@ export type Database = {
           created_by?: string
           deleted_at?: string | null
           description?: string | null
-          embedding_status?: string | null
           embedded_at?: string | null
+          embedding_status?: string | null
           id?: string
           metadata?: Json
           name: string
@@ -950,8 +1001,8 @@ export type Database = {
           created_by?: string
           deleted_at?: string | null
           description?: string | null
-          embedding_status?: string | null
           embedded_at?: string | null
+          embedding_status?: string | null
           id?: string
           metadata?: Json
           name?: string
@@ -1072,6 +1123,181 @@ export type Database = {
             referencedRelation: "messages"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "knowledge_operations_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_operations_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_operations_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_plans: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          committed_at: string | null
+          conversation_id: string | null
+          created_at: string
+          created_by: string
+          diff_summary: Json | null
+          extraction_run_id: string | null
+          id: string
+          learning_mode: string
+          metadata: Json | null
+          overall_confidence: number | null
+          plan_version: number
+          risk_level: string
+          status: string
+          summary: Json | null
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          committed_at?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          created_by?: string
+          diff_summary?: Json | null
+          extraction_run_id?: string | null
+          id?: string
+          learning_mode?: string
+          metadata?: Json | null
+          overall_confidence?: number | null
+          plan_version?: number
+          risk_level?: string
+          status?: string
+          summary?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          committed_at?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          created_by?: string
+          diff_summary?: Json | null
+          extraction_run_id?: string | null
+          id?: string
+          learning_mode?: string
+          metadata?: Json | null
+          overall_confidence?: number | null
+          plan_version?: number
+          risk_level?: string
+          status?: string
+          summary?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_plans_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_plans_extraction_run_id_fkey"
+            columns: ["extraction_run_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_extraction_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_proposals: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          extraction_confidence: number | null
+          extraction_run_id: string | null
+          id: string
+          model: string | null
+          original_payload: Json | null
+          payload: Json
+          proposal_type: string
+          provider: string | null
+          rejection_reason: string | null
+          source_message_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          validation_status: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          extraction_confidence?: number | null
+          extraction_run_id?: string | null
+          id?: string
+          model?: string | null
+          original_payload?: Json | null
+          payload?: Json
+          proposal_type: string
+          provider?: string | null
+          rejection_reason?: string | null
+          source_message_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          validation_status?: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          extraction_confidence?: number | null
+          extraction_run_id?: string | null
+          id?: string
+          model?: string | null
+          original_payload?: Json | null
+          payload?: Json
+          proposal_type?: string
+          provider?: string | null
+          rejection_reason?: string | null
+          source_message_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          validation_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_proposals_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_proposals_extraction_run_id_fkey"
+            columns: ["extraction_run_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_extraction_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_proposals_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
         ]
       }
       knowledge_provenance: {
@@ -1137,236 +1363,6 @@ export type Database = {
             columns: ["source_id"]
             isOneToOne: false
             referencedRelation: "sources"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      knowledge_extraction_runs: {
-        Row: {
-          id: string
-          user_id: string
-          conversation_id: string
-          trigger_message_id: string | null
-          status: string
-          relevance: string
-          model: string | null
-          provider: string | null
-          metrics: Json
-          error: string | null
-          started_at: string
-          completed_at: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id?: string
-          conversation_id: string
-          trigger_message_id?: string | null
-          status?: string
-          relevance?: string
-          model?: string | null
-          provider?: string | null
-          metrics?: Json
-          error?: string | null
-          started_at?: string
-          completed_at?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          conversation_id?: string
-          trigger_message_id?: string | null
-          status?: string
-          relevance?: string
-          model?: string | null
-          provider?: string | null
-          metrics?: Json
-          error?: string | null
-          started_at?: string
-          completed_at?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "knowledge_extraction_runs_conversation_id_fkey"
-            columns: ["conversation_id"]
-            isOneToOne: false
-            referencedRelation: "conversations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "knowledge_extraction_runs_trigger_message_id_fkey"
-            columns: ["trigger_message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      knowledge_proposals: {
-        Row: {
-          id: string
-          extraction_run_id: string | null
-          user_id: string
-          conversation_id: string
-          source_message_id: string | null
-          proposal_type: string
-          status: string
-          payload: Json
-          original_payload: Json | null
-          rejection_reason: string | null
-          extraction_confidence: number | null
-          validation_status: string
-          model: string | null
-          provider: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          extraction_run_id?: string | null
-          user_id?: string
-          conversation_id: string
-          source_message_id?: string | null
-          proposal_type: string
-          status?: string
-          payload?: Json
-          original_payload?: Json | null
-          rejection_reason?: string | null
-          extraction_confidence?: number | null
-          validation_status?: string
-          model?: string | null
-          provider?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          extraction_run_id?: string | null
-          user_id?: string
-          conversation_id?: string
-          source_message_id?: string | null
-          proposal_type?: string
-          status?: string
-          payload?: Json
-          original_payload?: Json | null
-          rejection_reason?: string | null
-          extraction_confidence?: number | null
-          validation_status?: string
-          model?: string | null
-          provider?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "knowledge_proposals_extraction_run_id_fkey"
-            columns: ["extraction_run_id"]
-            isOneToOne: false
-            referencedRelation: "knowledge_extraction_runs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "knowledge_proposals_conversation_id_fkey"
-            columns: ["conversation_id"]
-            isOneToOne: false
-            referencedRelation: "conversations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "knowledge_proposals_source_message_id_fkey"
-            columns: ["source_message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      knowledge_resolution_results: {
-        Row: {
-          canonical_node_id: string | null
-          created_at: string
-          extraction_confidence: number | null
-          extraction_run_id: string | null
-          id: string
-          manual_override: boolean
-          manual_override_at: string | null
-          manual_override_by: string | null
-          match_type: string
-          metadata: Json
-          proposal_id: string
-          reason_summary: string | null
-          resolution_confidence: number
-          resolver_version: string
-          selected_candidate_id: string | null
-          status: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          canonical_node_id?: string | null
-          created_at?: string
-          extraction_confidence?: number | null
-          extraction_run_id?: string | null
-          id?: string
-          manual_override?: boolean
-          manual_override_at?: string | null
-          manual_override_by?: string | null
-          match_type?: string
-          metadata?: Json
-          proposal_id: string
-          reason_summary?: string | null
-          resolution_confidence?: number
-          resolver_version?: string
-          selected_candidate_id?: string | null
-          status: string
-          updated_at?: string
-          user_id?: string
-        }
-        Update: {
-          canonical_node_id?: string | null
-          created_at?: string
-          extraction_confidence?: number | null
-          extraction_run_id?: string | null
-          id?: string
-          manual_override?: boolean
-          manual_override_at?: string | null
-          manual_override_by?: string | null
-          match_type?: string
-          metadata?: Json
-          proposal_id?: string
-          reason_summary?: string | null
-          resolution_confidence?: number
-          resolver_version?: string
-          selected_candidate_id?: string | null
-          status?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "knowledge_resolution_results_canonical_node_id_fkey"
-            columns: ["canonical_node_id"]
-            isOneToOne: false
-            referencedRelation: "knowledge_nodes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "knowledge_resolution_results_extraction_run_id_fkey"
-            columns: ["extraction_run_id"]
-            isOneToOne: false
-            referencedRelation: "knowledge_extraction_runs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "knowledge_resolution_results_proposal_id_fkey"
-            columns: ["proposal_id"]
-            isOneToOne: false
-            referencedRelation: "knowledge_proposals"
             referencedColumns: ["id"]
           },
         ]
@@ -1437,134 +1433,94 @@ export type Database = {
           },
         ]
       }
-      knowledge_plans: {
+      knowledge_resolution_results: {
         Row: {
-          approved_at: string | null
-          approved_by: string | null
-          committed_at: string | null
-          conversation_id: string | null
+          canonical_node_id: string | null
           created_at: string
-          created_by: string
-          diff_summary: Json
+          extraction_confidence: number | null
           extraction_run_id: string | null
           id: string
-          learning_mode: string
+          manual_override: boolean
+          manual_override_at: string | null
+          manual_override_by: string | null
+          match_type: string
           metadata: Json
-          overall_confidence: number | null
-          plan_version: number
-          risk_level: string
+          proposal_id: string
+          reason_summary: string | null
+          resolution_confidence: number
+          resolver_version: string
+          selected_candidate_id: string | null
           status: string
-          summary: Json
           updated_at: string
+          user_id: string
         }
         Insert: {
-          approved_at?: string | null
-          approved_by?: string | null
-          committed_at?: string | null
-          conversation_id?: string | null
+          canonical_node_id?: string | null
           created_at?: string
-          created_by?: string
-          diff_summary?: Json
+          extraction_confidence?: number | null
           extraction_run_id?: string | null
           id?: string
-          learning_mode?: string
+          manual_override?: boolean
+          manual_override_at?: string | null
+          manual_override_by?: string | null
+          match_type?: string
           metadata?: Json
-          overall_confidence?: number | null
-          plan_version?: number
-          risk_level?: string
-          status?: string
-          summary?: Json
+          proposal_id: string
+          reason_summary?: string | null
+          resolution_confidence?: number
+          resolver_version?: string
+          selected_candidate_id?: string | null
+          status: string
           updated_at?: string
+          user_id: string
         }
         Update: {
-          approved_at?: string | null
-          approved_by?: string | null
-          committed_at?: string | null
-          conversation_id?: string | null
+          canonical_node_id?: string | null
           created_at?: string
-          created_by?: string
-          diff_summary?: Json
+          extraction_confidence?: number | null
           extraction_run_id?: string | null
           id?: string
-          learning_mode?: string
+          manual_override?: boolean
+          manual_override_at?: string | null
+          manual_override_by?: string | null
+          match_type?: string
           metadata?: Json
-          overall_confidence?: number | null
-          plan_version?: number
-          risk_level?: string
+          proposal_id?: string
+          reason_summary?: string | null
+          resolution_confidence?: number
+          resolver_version?: string
+          selected_candidate_id?: string | null
           status?: string
-          summary?: Json
           updated_at?: string
+          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "knowledge_plans_conversation_id_fkey"
-            columns: ["conversation_id"]
+            foreignKeyName: "knowledge_resolution_results_canonical_node_id_fkey"
+            columns: ["canonical_node_id"]
             isOneToOne: false
-            referencedRelation: "conversations"
+            referencedRelation: "knowledge_nodes"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "knowledge_plans_extraction_run_id_fkey"
+            foreignKeyName: "knowledge_resolution_results_extraction_run_id_fkey"
             columns: ["extraction_run_id"]
             isOneToOne: false
             referencedRelation: "knowledge_extraction_runs"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      knowledge_transactions: {
-        Row: {
-          approved_by: string | null
-          completed_at: string | null
-          conversation_id: string | null
-          id: string
-          initiated_by: string
-          metadata: Json
-          operation_count: number
-          plan_id: string
-          started_at: string
-          status: string
-          summary: Json
-        }
-        Insert: {
-          approved_by?: string | null
-          completed_at?: string | null
-          conversation_id?: string | null
-          id?: string
-          initiated_by?: string
-          metadata?: Json
-          operation_count?: number
-          plan_id: string
-          started_at?: string
-          status?: string
-          summary?: Json
-        }
-        Update: {
-          approved_by?: string | null
-          completed_at?: string | null
-          conversation_id?: string | null
-          id?: string
-          initiated_by?: string
-          metadata?: Json
-          operation_count?: number
-          plan_id?: string
-          started_at?: string
-          status?: string
-          summary?: Json
-        }
-        Relationships: [
           {
-            foreignKeyName: "knowledge_transactions_conversation_id_fkey"
-            columns: ["conversation_id"]
+            foreignKeyName: "knowledge_resolution_results_proposal_id_fkey"
+            columns: ["proposal_id"]
             isOneToOne: false
-            referencedRelation: "conversations"
+            referencedRelation: "knowledge_proposals"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "knowledge_transactions_plan_id_fkey"
-            columns: ["plan_id"]
+            foreignKeyName: "knowledge_resolution_results_selected_candidate_id_fkey"
+            columns: ["selected_candidate_id"]
             isOneToOne: false
-            referencedRelation: "knowledge_plans"
+            referencedRelation: "knowledge_nodes"
             referencedColumns: ["id"]
           },
         ]
@@ -1594,7 +1550,7 @@ export type Database = {
           min_relation_confidence?: number
           require_evidence_for_claims?: boolean
           updated_at?: string
-          user_id?: string
+          user_id: string
         }
         Update: {
           auto_add_aliases?: boolean
@@ -1611,9 +1567,66 @@ export type Database = {
         }
         Relationships: []
       }
+      knowledge_transactions: {
+        Row: {
+          approved_by: string | null
+          completed_at: string | null
+          conversation_id: string | null
+          id: string
+          initiated_by: string
+          metadata: Json | null
+          operation_count: number
+          plan_id: string | null
+          started_at: string
+          status: string
+          summary: Json | null
+        }
+        Insert: {
+          approved_by?: string | null
+          completed_at?: string | null
+          conversation_id?: string | null
+          id?: string
+          initiated_by?: string
+          metadata?: Json | null
+          operation_count?: number
+          plan_id?: string | null
+          started_at?: string
+          status?: string
+          summary?: Json | null
+        }
+        Update: {
+          approved_by?: string | null
+          completed_at?: string | null
+          conversation_id?: string | null
+          id?: string
+          initiated_by?: string
+          metadata?: Json | null
+          operation_count?: number
+          plan_id?: string | null
+          started_at?: string
+          status?: string
+          summary?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_transactions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_transactions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       knowledge_versions: {
         Row: {
-          change_type: string
+          change_type: string | null
           created_at: string
           created_by: string
           id: string
@@ -1628,7 +1641,7 @@ export type Database = {
           version: number
         }
         Insert: {
-          change_type?: string
+          change_type?: string | null
           created_at?: string
           created_by?: string
           id?: string
@@ -1643,7 +1656,7 @@ export type Database = {
           version: number
         }
         Update: {
-          change_type?: string
+          change_type?: string | null
           created_at?: string
           created_by?: string
           id?: string
@@ -1657,7 +1670,29 @@ export type Database = {
           subject_table?: string
           version?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_versions_knowledge_operation_id_fkey"
+            columns: ["knowledge_operation_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_operations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_versions_knowledge_transaction_id_fkey"
+            columns: ["knowledge_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_versions_previous_version_id_fkey"
+            columns: ["previous_version_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_versions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       messages: {
         Row: {
@@ -1769,11 +1804,182 @@ export type Database = {
         }
         Relationships: []
       }
+      retrieval_feedback: {
+        Row: {
+          assistant_message_id: string | null
+          created_at: string
+          feedback_type: string | null
+          id: string
+          notes: string | null
+          rating: string
+          retrieval_run_id: string
+          user_id: string | null
+        }
+        Insert: {
+          assistant_message_id?: string | null
+          created_at?: string
+          feedback_type?: string | null
+          id?: string
+          notes?: string | null
+          rating: string
+          retrieval_run_id: string
+          user_id?: string | null
+        }
+        Update: {
+          assistant_message_id?: string | null
+          created_at?: string
+          feedback_type?: string | null
+          id?: string
+          notes?: string | null
+          rating?: string
+          retrieval_run_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "retrieval_feedback_assistant_message_id_fkey"
+            columns: ["assistant_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retrieval_feedback_retrieval_run_id_fkey"
+            columns: ["retrieval_run_id"]
+            isOneToOne: false
+            referencedRelation: "retrieval_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      retrieval_items: {
+        Row: {
+          created_at: string
+          id: string
+          object_id: string
+          object_type: string
+          rank: number
+          retrieval_method: string
+          retrieval_run_id: string
+          score: number
+          score_breakdown: Json
+          selected_for_context: boolean
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          object_id: string
+          object_type: string
+          rank?: number
+          retrieval_method: string
+          retrieval_run_id: string
+          score?: number
+          score_breakdown?: Json
+          selected_for_context?: boolean
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          object_id?: string
+          object_type?: string
+          rank?: number
+          retrieval_method?: string
+          retrieval_run_id?: string
+          score?: number
+          score_breakdown?: Json
+          selected_for_context?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "retrieval_items_retrieval_run_id_fkey"
+            columns: ["retrieval_run_id"]
+            isOneToOne: false
+            referencedRelation: "retrieval_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      retrieval_runs: {
+        Row: {
+          answer_mode: string
+          assistant_message_id: string | null
+          completed_at: string | null
+          conversation_id: string | null
+          created_at: string
+          duration_ms: number | null
+          grounding_state: string
+          id: string
+          metadata: Json
+          normalized_query: string | null
+          query: string
+          query_type: string
+          started_at: string
+          status: string
+          user_message_id: string | null
+        }
+        Insert: {
+          answer_mode?: string
+          assistant_message_id?: string | null
+          completed_at?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          grounding_state?: string
+          id?: string
+          metadata?: Json
+          normalized_query?: string | null
+          query: string
+          query_type?: string
+          started_at?: string
+          status?: string
+          user_message_id?: string | null
+        }
+        Update: {
+          answer_mode?: string
+          assistant_message_id?: string | null
+          completed_at?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          grounding_state?: string
+          id?: string
+          metadata?: Json
+          normalized_query?: string | null
+          query?: string
+          query_type?: string
+          started_at?: string
+          status?: string
+          user_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "retrieval_runs_assistant_message_id_fkey"
+            columns: ["assistant_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retrieval_runs_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retrieval_runs_user_message_id_fkey"
+            columns: ["user_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sources: {
         Row: {
           accessed_at: string | null
           author: string | null
-          availability: string | null
+          availability: string
           content_hash: string | null
           created_at: string
           created_by: string
@@ -1785,7 +1991,7 @@ export type Database = {
           publisher: string | null
           reliability: number | null
           source_kind: Database["public"]["Enums"]["source_kind"]
-          source_quality: string | null
+          source_quality: string
           title: string
           updated_at: string
           url: string | null
@@ -1793,7 +1999,7 @@ export type Database = {
         Insert: {
           accessed_at?: string | null
           author?: string | null
-          availability?: string | null
+          availability?: string
           content_hash?: string | null
           created_at?: string
           created_by?: string
@@ -1805,7 +2011,7 @@ export type Database = {
           publisher?: string | null
           reliability?: number | null
           source_kind?: Database["public"]["Enums"]["source_kind"]
-          source_quality?: string | null
+          source_quality?: string
           title: string
           updated_at?: string
           url?: string | null
@@ -1813,7 +2019,7 @@ export type Database = {
         Update: {
           accessed_at?: string | null
           author?: string | null
-          availability?: string | null
+          availability?: string
           content_hash?: string | null
           created_at?: string
           created_by?: string
@@ -1825,7 +2031,7 @@ export type Database = {
           publisher?: string | null
           reliability?: number | null
           source_kind?: Database["public"]["Enums"]["source_kind"]
-          source_quality?: string | null
+          source_quality?: string
           title?: string
           updated_at?: string
           url?: string | null
@@ -1837,31 +2043,27 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      rollback_entity_to_version: {
-        Args: {
-          p_subject_table: string
-          p_subject_id: string
-          p_target_version: number
-          p_reason?: string
-        }
-        Returns: Json
-      }
-      explain_claim_knowledge: {
-        Args: {
-          p_claim_id: string
-        }
-        Returns: Json
-      }
-      commit_knowledge_plan: {
-        Args: {
-          p_plan_id: string
-          p_approved_operation_ids?: string[] | null
-        }
-        Returns: Json
-      }
       archive_conversation: {
         Args: { p_conversation_id: string }
         Returns: Json
+      }
+      commit_knowledge_plan: {
+        Args: { p_approved_operation_ids?: string[]; p_plan_id: string }
+        Returns: Json
+      }
+      explain_claim_knowledge: { Args: { p_claim_id: string }; Returns: Json }
+      find_graph_paths: {
+        Args: {
+          p_max_depth?: number
+          p_source_node_id: string
+          p_target_node_id: string
+        }
+        Returns: {
+          path_edges: string[]
+          path_length: number
+          path_nodes: string[]
+          path_relations: string[]
+        }[]
       }
       get_brain_context_for_query: {
         Args: {
@@ -1873,6 +2075,10 @@ export type Database = {
         Returns: Json
       }
       get_brain_stats: { Args: never; Returns: Json }
+      get_conversation_extraction_summary: {
+        Args: { p_conversation_id: string }
+        Returns: Json
+      }
       get_graph_neighborhood: {
         Args: { p_depth?: number; p_node_id: string }
         Returns: Json
@@ -1911,22 +2117,47 @@ export type Database = {
           slug: string
         }[]
       }
+      match_knowledge_nodes: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          p_node_type?: Database["public"]["Enums"]["node_type"]
+          query_embedding: string
+        }
+        Returns: {
+          canonical_name: string
+          description: string
+          id: string
+          metadata: Json
+          name: string
+          node_type: Database["public"]["Enums"]["node_type"]
+          similarity: number
+        }[]
+      }
       normalize_knowledge_name: { Args: { raw_name: string }; Returns: string }
       resolve_knowledge_node: {
         Args: {
           p_name: string
           p_node_type?: Database["public"]["Enums"]["node_type"]
-          p_parent_id?: string | null
+          p_parent_id?: string
+        }
+        Returns: Json
+      }
+      rollback_entity_to_version: {
+        Args: {
+          p_subject_id: string
+          p_subject_table: string
+          p_target_version: number
         }
         Returns: Json
       }
       safe_attach_evidence: {
         Args: {
           p_claim_id: string
-          p_confidence?: number | null
+          p_confidence?: number
           p_evidence_type?: string
-          p_excerpt?: string | null
-          p_locator?: string | null
+          p_excerpt?: string
+          p_locator?: string
           p_metadata?: Json
           p_source_id: string
           p_stance?: Database["public"]["Enums"]["verification_status"]
@@ -1936,9 +2167,9 @@ export type Database = {
       safe_create_claim: {
         Args: {
           p_claim_type?: string
-          p_confidence?: number | null
+          p_confidence?: number
           p_metadata?: Json
-          p_node_id?: string | null
+          p_node_id: string
           p_statement: string
           p_status?: Database["public"]["Enums"]["knowledge_status"]
         }
@@ -1946,21 +2177,19 @@ export type Database = {
       }
       safe_create_knowledge_node: {
         Args: {
-          p_description?: string | null
+          p_description?: string
           p_force?: boolean
           p_metadata?: Json
           p_name: string
           p_node_type?: Database["public"]["Enums"]["node_type"]
-          p_parent_id?: string | null
-          p_status?: Database["public"]["Enums"]["knowledge_status"]
-          p_summary?: string | null
+          p_parent_id?: string
         }
         Returns: Json
       }
       safe_create_relation: {
         Args: {
-          p_confidence?: number | null
-          p_description?: string | null
+          p_confidence?: number
+          p_description?: string
           p_metadata?: Json
           p_relation_type: string
           p_source_node_id: string
@@ -1970,66 +2199,30 @@ export type Database = {
         Returns: Json
       }
       safe_move_knowledge_node: {
-        Args: { p_new_parent_id: string | null; p_node_id: string }
+        Args: { p_new_parent_id: string; p_node_id: string }
         Returns: Json
+      }
+      search_knowledge_nodes_lexical: {
+        Args: { p_limit?: number; p_query: string }
+        Returns: {
+          alias_match: boolean
+          canonical_name: string
+          description: string
+          exact_match: boolean
+          matched_alias: string
+          name: string
+          node_id: string
+          node_type: Database["public"]["Enums"]["node_type"]
+          parent_id: string
+          slug: string
+          text_similarity: number
+        }[]
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       validate_node_move: {
-        Args: { p_new_parent_id: string | null; p_node_id: string }
+        Args: { p_new_parent_id: string; p_node_id: string }
         Returns: Json
-      }
-      get_conversation_extraction_summary: {
-        Args: { p_conversation_id: string }
-        Returns: Json
-      }
-      match_knowledge_nodes: {
-        Args: {
-          query_embedding: string
-          match_threshold?: number
-          match_count?: number
-          p_node_type?: Database["public"]["Enums"]["node_type"]
-        }
-        Returns: {
-          id: string
-          name: string
-          canonical_name: string | null
-          slug: string
-          node_type: Database["public"]["Enums"]["node_type"]
-          description: string | null
-          parent_id: string | null
-          similarity: number
-        }[]
-      }
-      search_knowledge_nodes_lexical: {
-        Args: {
-          p_query: string
-          p_limit?: number
-        }
-        Returns: {
-          id: string
-          name: string
-          canonical_name: string | null
-          slug: string
-          node_type: Database["public"]["Enums"]["node_type"]
-          description: string | null
-          parent_id: string | null
-          match_source: string
-          similarity: number
-        }[]
-      }
-      find_graph_paths: {
-        Args: {
-          p_max_depth?: number
-          p_source_node_id: string
-          p_target_node_id: string
-        }
-        Returns: {
-          path_nodes: string[]
-          path_edges: string[]
-          path_relations: string[]
-          path_length: number
-        }[]
       }
     }
     Enums: {
