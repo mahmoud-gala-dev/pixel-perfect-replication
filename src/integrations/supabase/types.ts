@@ -1988,6 +1988,8 @@ export type Database = {
           autonomy_mode: string
           blocked_domains: Json | null
           daily_mission_budget: number
+          encrypted_api_keys: string | null
+          keys_synced_at: string | null
           kill_switch_auto_learning: boolean
           kill_switch_connectors: boolean
           kill_switch_embeddings: boolean
@@ -2016,6 +2018,8 @@ export type Database = {
           autonomy_mode?: string
           blocked_domains?: Json | null
           daily_mission_budget?: number
+          encrypted_api_keys?: string | null
+          keys_synced_at?: string | null
           kill_switch_auto_learning?: boolean
           kill_switch_connectors?: boolean
           kill_switch_embeddings?: boolean
@@ -2044,6 +2048,8 @@ export type Database = {
           autonomy_mode?: string
           blocked_domains?: Json | null
           daily_mission_budget?: number
+          encrypted_api_keys?: string | null
+          keys_synced_at?: string | null
           kill_switch_auto_learning?: boolean
           kill_switch_connectors?: boolean
           kill_switch_embeddings?: boolean
