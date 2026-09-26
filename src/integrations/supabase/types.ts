@@ -224,6 +224,134 @@ export type Database = {
         }
         Relationships: []
       }
+      brain_audit_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          actor_role: string
+          correlation_id: string | null
+          created_at: string
+          diff: Json | null
+          id: string
+          metadata: Json | null
+          result: string
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          actor_role?: string
+          correlation_id?: string | null
+          created_at?: string
+          diff?: Json | null
+          id?: string
+          metadata?: Json | null
+          result?: string
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          actor_role?: string
+          correlation_id?: string | null
+          created_at?: string
+          diff?: Json | null
+          id?: string
+          metadata?: Json | null
+          result?: string
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: []
+      }
+      brain_connector_resources: {
+        Row: {
+          connector_id: string
+          content_hash: string | null
+          created_at: string
+          external_resource_id: string
+          id: string
+          last_seen_at: string
+          status: string
+          title: string
+          url: string | null
+          user_id: string
+        }
+        Insert: {
+          connector_id: string
+          content_hash?: string | null
+          created_at?: string
+          external_resource_id: string
+          id?: string
+          last_seen_at?: string
+          status?: string
+          title: string
+          url?: string | null
+          user_id?: string
+        }
+        Update: {
+          connector_id?: string
+          content_hash?: string | null
+          created_at?: string
+          external_resource_id?: string
+          id?: string
+          last_seen_at?: string
+          status?: string
+          title?: string
+          url?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brain_connector_resources_connector_id_fkey"
+            columns: ["connector_id"]
+            isOneToOne: false
+            referencedRelation: "brain_connectors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brain_connectors: {
+        Row: {
+          config_encrypted: string | null
+          connector_type: string
+          created_at: string
+          id: string
+          last_synced_at: string | null
+          name: string
+          status: string
+          sync_cursor: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          config_encrypted?: string | null
+          connector_type: string
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          name: string
+          status?: string
+          sync_cursor?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          config_encrypted?: string | null
+          connector_type?: string
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          name?: string
+          status?: string
+          sync_cursor?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       brain_goals: {
         Row: {
           created_at: string
@@ -408,6 +536,33 @@ export type Database = {
           summary?: string
           target_id?: string
           target_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      brain_user_roles: {
+        Row: {
+          created_at: string
+          granted_by: string | null
+          id: string
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          role?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -766,6 +921,7 @@ export type Database = {
           node_id: string | null
           normalized_statement: string | null
           observed_at: string | null
+          scope: string
           source_id: string | null
           status: Database["public"]["Enums"]["knowledge_status"]
           superseded_at: string | null
@@ -791,6 +947,7 @@ export type Database = {
           node_id?: string | null
           normalized_statement?: string | null
           observed_at?: string | null
+          scope?: string
           source_id?: string | null
           status?: Database["public"]["Enums"]["knowledge_status"]
           superseded_at?: string | null
@@ -816,6 +973,7 @@ export type Database = {
           node_id?: string | null
           normalized_statement?: string | null
           observed_at?: string | null
+          scope?: string
           source_id?: string | null
           status?: Database["public"]["Enums"]["knowledge_status"]
           superseded_at?: string | null
@@ -1264,6 +1422,7 @@ export type Database = {
           name: string
           node_type: Database["public"]["Enums"]["node_type"]
           parent_id: string | null
+          scope: string
           slug: string
           status: Database["public"]["Enums"]["knowledge_status"]
           summary: string | null
@@ -1282,6 +1441,7 @@ export type Database = {
           name: string
           node_type?: Database["public"]["Enums"]["node_type"]
           parent_id?: string | null
+          scope?: string
           slug: string
           status?: Database["public"]["Enums"]["knowledge_status"]
           summary?: string | null
@@ -1300,6 +1460,7 @@ export type Database = {
           name?: string
           node_type?: Database["public"]["Enums"]["node_type"]
           parent_id?: string | null
+          scope?: string
           slug?: string
           status?: Database["public"]["Enums"]["knowledge_status"]
           summary?: string | null
@@ -1827,6 +1988,11 @@ export type Database = {
           autonomy_mode: string
           blocked_domains: Json | null
           daily_mission_budget: number
+          kill_switch_auto_learning: boolean
+          kill_switch_connectors: boolean
+          kill_switch_embeddings: boolean
+          kill_switch_missions: boolean
+          kill_switch_research: boolean
           learning_mode: string
           max_ai_calls_per_mission: number
           max_concurrent_missions: number
@@ -1848,6 +2014,11 @@ export type Database = {
           autonomy_mode?: string
           blocked_domains?: Json | null
           daily_mission_budget?: number
+          kill_switch_auto_learning?: boolean
+          kill_switch_connectors?: boolean
+          kill_switch_embeddings?: boolean
+          kill_switch_missions?: boolean
+          kill_switch_research?: boolean
           learning_mode?: string
           max_ai_calls_per_mission?: number
           max_concurrent_missions?: number
@@ -1869,6 +2040,11 @@ export type Database = {
           autonomy_mode?: string
           blocked_domains?: Json | null
           daily_mission_budget?: number
+          kill_switch_auto_learning?: boolean
+          kill_switch_connectors?: boolean
+          kill_switch_embeddings?: boolean
+          kill_switch_missions?: boolean
+          kill_switch_research?: boolean
           learning_mode?: string
           max_ai_calls_per_mission?: number
           max_concurrent_missions?: number
@@ -2532,6 +2708,7 @@ export type Database = {
         Args: { p_conversation_id: string }
         Returns: Json
       }
+      check_brain_data_integrity: { Args: never; Returns: Json }
       commit_knowledge_plan: {
         Args: { p_approved_operation_ids?: string[]; p_plan_id: string }
         Returns: Json
@@ -2563,6 +2740,7 @@ export type Database = {
       get_brain_health_report: { Args: never; Returns: Json }
       get_brain_maintenance_summary: { Args: never; Returns: Json }
       get_brain_stats: { Args: never; Returns: Json }
+      get_brain_system_status: { Args: never; Returns: Json }
       get_conversation_extraction_summary: {
         Args: { p_conversation_id: string }
         Returns: Json
@@ -2633,6 +2811,7 @@ export type Database = {
           slug: string
         }[]
       }
+      get_user_highest_role: { Args: { p_user_id?: string }; Returns: string }
       match_knowledge_nodes: {
         Args: {
           match_count?: number
