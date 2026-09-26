@@ -410,7 +410,7 @@ export async function safeCreateRelation(
       p_source_node_id: input.source_node_id,
       p_target_node_id: input.target_node_id,
       p_relation_type: input.relation_type,
-      p_description: input.description ?? null,
+      p_description: input.description ?? undefined,
       p_confidence: input.confidence ?? 1.0,
       p_status: input.status ?? "active",
       p_metadata: (input.metadata ?? {}) as any,

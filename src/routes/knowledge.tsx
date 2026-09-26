@@ -576,7 +576,7 @@ function KnowledgePage() {
       try {
         const { data, error } = await supabase.rpc("safe_move_knowledge_node", {
           p_node_id: selected.id,
-          p_new_parent_id: targetParentId,
+          p_new_parent_id: targetParentId ?? undefined,
         });
         if (!error && data) {
           return;
@@ -1743,7 +1743,7 @@ function KnowledgePage() {
           <DialogFooter>
             <Button
               disabled={!form.name.trim() || createOrUpdateNode.isPending}
-              onClick={() => createOrUpdateNode.mutate()}
+              onClick={() => createOrUpdateNode.mutate(undefined)}
             >
               {dialog === "edit" ? "Save Changes" : "Create Node"}
             </Button>

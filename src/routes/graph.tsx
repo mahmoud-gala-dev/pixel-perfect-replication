@@ -118,7 +118,7 @@ function GraphPage() {
 
   // URL search params parsing for deep-linking
   const initialParams = useMemo(() => {
-    if (typeof window === "undefined") return { focus: null, target: null, tab: "neighborhood" };
+    if (typeof window === "undefined") return { focus: null, target: null, tab: "neighborhood" as GraphViewMode };
     const p = new URLSearchParams(window.location.search);
     return {
       focus: p.get("focus"),
@@ -421,8 +421,8 @@ function GraphPage() {
       });
     },
     onSuccess: (res) => {
-      if (res.error) {
-        toast.error(res.error);
+      if (res.status === "rejected") {
+        toast.error(res.message ?? "Relation rejected");
         return;
       }
       toast.success("Relation created and committed to Knowledge Graph.");

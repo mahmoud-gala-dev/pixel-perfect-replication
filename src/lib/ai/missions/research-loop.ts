@@ -18,8 +18,6 @@ import {
 import type {
   KnowledgeNode,
   KnowledgeClaim,
-  KnowledgeSource,
-  KnowledgeEvidence,
 } from "@/lib/knowledge-engine/types";
 
 export interface ResearchLoopInput {

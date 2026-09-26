@@ -42,9 +42,9 @@ export async function safeCreateKnowledgeNode(
   try {
     const { data, error } = await supabase.rpc("safe_create_knowledge_node", {
       p_name: trimmedName,
-      p_parent_id: parent_id ?? null,
+      p_parent_id: parent_id ?? undefined,
       p_node_type: (node_type ?? "topic") as Database["public"]["Enums"]["node_type"],
-      p_description: description ?? null,
+      p_description: description ?? undefined,
       p_summary: summary ?? null,
       p_status: (status ?? "active") as Database["public"]["Enums"]["knowledge_status"],
       p_metadata: (metadata ?? {}) as Json,
