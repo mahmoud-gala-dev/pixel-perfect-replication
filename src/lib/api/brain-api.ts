@@ -244,13 +244,10 @@ export class BrainApi {
           maxEvidence: Math.min(options.maxEvidence || 8, 20),
           maxClaims: 15,
           maxNodes: 15,
-          maxEdges: 20,
+          maxRelations: 20,
           maxSources: 10,
-          candidateLimit: 25,
-          graphDepth: 2,
-          rerankerLimit: 15,
-          tokenBudget: 3500,
-          contextBudget: 4000,
+          maxGraphHops: 2,
+          maxTokens: 3500,
         },
       }
     );
@@ -274,7 +271,7 @@ export class BrainApi {
     assertPermission(ctx.role, "canReadKnowledge");
 
     const observer = new BrainObserver(this.supabase);
-    return await observer.getBrainHealthReport();
+    return await observer.scan(undefined, ctx.userId ?? "system");
   }
 
   /**

@@ -104,7 +104,7 @@ function DashboardPage() {
       const [nodes, edges, claims, sources, gaps, conflicts, proposals] = await Promise.all([
         supabase.from("knowledge_nodes").select("id", { count: "exact", head: true }).is("deleted_at", null),
         supabase.from("knowledge_edges").select("id", { count: "exact", head: true }),
-        supabase.from("knowledge_claims").select("id, verification_status, is_outdated, status"),
+        supabase.from("knowledge_claims").select("id, verification, knowledge_state"),
         supabase.from("sources").select("id, availability").is("deleted_at", null),
         supabase.from("knowledge_gaps").select("id", { count: "exact", head: true }).eq("status", "open"),
         supabase.from("knowledge_conflicts").select("id", { count: "exact", head: true }).eq("status", "open"),
@@ -119,10 +119,10 @@ function DashboardPage() {
         nodes: nodes.count || 0,
         edges: edges.count || 0,
         claims: claimRows.length,
-        verified_claims: claimRows.filter((c) => c.verification_status === "verified").length,
-        unverified_claims: claimRows.filter((c) => c.verification_status === "unverified").length,
-        conflicted_claims: claimRows.filter((c) => c.status === "conflicted").length,
-        outdated_claims: claimRows.filter((c) => c.is_outdated || c.status === "outdated").length,
+        verified_claims: claimRows.filter((c) => c.verification === "verified").length,
+        unverified_claims: claimRows.filter((c) => c.verification === "unverified").length,
+        conflicted_claims: claimRows.filter((c) => (c.knowledge_state as string) === "conflicted").length,
+        outdated_claims: claimRows.filter((c) => (c.knowledge_state as string) === "outdated").length,
         sources: sourceRows.length,
         broken_sources: sourceRows.filter((s) => s.availability === "broken" || s.availability === "unavailable").length,
         evidence: 0,
@@ -1260,6 +1260,7 @@ function DashboardPage() {
 
               {(!brainMissions || brainMissions.length === 0) ? (
                 <EmptyState
+                  icon={Brain}
                   title="No Missions Running"
                   description="All improvement missions are complete. Missions are created from observations or gaps."
                 />
@@ -1338,6 +1339,7 @@ function DashboardPage() {
 
               {(!brainObservations || brainObservations.length === 0) ? (
                 <EmptyState
+                  icon={Brain}
                   title="No Weaknesses Observed"
                   description="Brain observer has not detected open gaps or structural flaws in current knowledge."
                 />

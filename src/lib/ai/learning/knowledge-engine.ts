@@ -279,7 +279,7 @@ export class KnowledgeEngine {
       try {
         const { data, error } = await this.supabase.rpc("commit_knowledge_plan", {
           p_plan_id: planId,
-          p_approved_operation_ids: approvedOperationIds || null,
+          p_approved_operation_ids: approvedOperationIds || undefined,
         });
 
         if (!error && data && (data as any).success) {
@@ -337,7 +337,8 @@ export class KnowledgeEngine {
               metadata: {},
               embedding_status: "pending",
               embedded_at: null,
-            };
+              scope: "user",
+            } as KnowledgeNode;
 
             inMemoryContext.nodes.push(newNode);
             summary.created_nodes++;
