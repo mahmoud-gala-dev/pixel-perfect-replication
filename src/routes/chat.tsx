@@ -3,10 +3,11 @@
 // Conversation Memory, Secure LLM Gateway & Read-Only Brain Context
 // =====================================================================
 
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   MessagesSquare,
+  Network,
   Plus,
   Send,
   Sparkles,
@@ -85,11 +86,16 @@ export const Route = createFileRoute("/chat")({
 
 export function ChatPage() {
   const { session } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   // State
+  const initialDraft = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("q") || "";
+  }, []);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(initialDraft);
   const [searchQuery, setSearchQuery] = useState("");
   const [useBrainContext, setUseBrainContext] = useState(true);
   const [selectedModel, setSelectedModel] = useState("brain-assistant-fast");
@@ -956,6 +962,21 @@ export function ChatPage() {
                                 >
                                   <Sliders className="size-3" />
                                   <span>Trace & Inspector</span>
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    const focusNodeId = references?.nodes?.[0]?.id;
+                                    if (focusNodeId) {
+                                      void navigate({ to: "/graph", search: { focus: focusNodeId } as any });
+                                    } else {
+                                      void navigate({ to: "/graph" });
+                                    }
+                                  }}
+                                  className="inline-flex items-center gap-1 text-[11px] font-medium text-cyan-500 hover:underline cursor-pointer"
+                                >
+                                  <Network className="size-3" />
+                                  <span>View in Graph</span>
                                 </button>
                               </>
                             )}

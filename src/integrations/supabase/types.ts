@@ -907,6 +907,42 @@ export type Database = {
         }
         Relationships: []
       }
+      saved_graph_views: {
+        Row: {
+          created_at: string
+          depth: number
+          filters: Json
+          id: string
+          layout: string
+          name: string
+          root_node_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          depth?: number
+          filters?: Json
+          id?: string
+          layout?: string
+          name: string
+          root_node_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          depth?: number
+          filters?: Json
+          id?: string
+          layout?: string
+          name?: string
+          root_node_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       knowledge_nodes: {
         Row: {
           canonical_name: string | null
@@ -2030,6 +2066,45 @@ export type Database = {
           path_relations: string[]
           path_length: number
         }[]
+      }
+      get_brain_dashboard_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      get_brain_health_report: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      get_knowledge_hotspots: {
+        Args: { p_limit?: number }
+        Returns: {
+          node_id: string
+          name: string
+          canonical_name: string | null
+          slug: string
+          node_type: Database["public"]["Enums"]["node_type"]
+          in_degree: number
+          out_degree: number
+          claim_count: number
+          total_degree: number
+        }[]
+      }
+      get_orphan_nodes: {
+        Args: { p_limit?: number }
+        Returns: {
+          node_id: string
+          name: string
+          canonical_name: string | null
+          slug: string
+          node_type: Database["public"]["Enums"]["node_type"]
+          parent_id: string | null
+          created_at: string
+          orphan_reason: string
+        }[]
+      }
+      get_domain_dashboard_stats: {
+        Args: { p_node_id: string }
+        Returns: Json
       }
     }
     Enums: {

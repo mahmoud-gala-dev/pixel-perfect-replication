@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Library,
@@ -8,6 +8,8 @@ import {
   Archive,
   Pencil,
   FolderTree,
+  Network,
+  Sparkles,
   AlertTriangle,
   CheckCircle2,
   Trash2,
@@ -128,9 +130,14 @@ const NONE = "__none__";
 
 function KnowledgePage() {
   const { session } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const initialNodeId = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    return new URLSearchParams(window.location.search).get("nodeId");
+  }, []);
+  const [selectedId, setSelectedId] = useState<string | null>(initialNodeId);
   const [showArchived, setShowArchived] = useState(false);
   const [dialog, setDialog] = useState<
     null | "create" | "edit" | "move" | "alias" | "relation" | "claim" | "inspect-evidence" | "attach-evidence"
@@ -1004,6 +1011,29 @@ function KnowledgePage() {
                       }}
                     >
                       <History className="size-4" /> History
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        void navigate({ to: "/graph", search: { focus: selected.id } as any });
+                      }}
+                      title="Open in Knowledge Graph"
+                    >
+                      <Network className="size-4 text-cyan-400" /> View in Graph
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        void navigate({
+                          to: "/chat",
+                          search: { q: `Explain ${selected.name} and its verified claims in the Brain.` } as any,
+                        });
+                      }}
+                      title="Ask Brain about this concept"
+                    >
+                      <Sparkles className="size-4 text-amber-400" /> Ask Brain
                     </Button>
                     <Button
                       size="sm"

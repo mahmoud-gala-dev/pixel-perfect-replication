@@ -7,4 +7,6 @@ export * from "./relations";
 export * from "./claims";
 export * from "./evidence";
 export * from "./graph-query";
-
+export * from "./brain-health";
+export * from "./knowledge-maps";
+export * from "./knowledge-paths";
