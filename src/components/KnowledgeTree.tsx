@@ -23,6 +23,8 @@ import type { TreeNode } from "@/lib/knowledge-engine/hierarchy";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { DeduplicationService } from "@/lib/ai/resolution/deduplication-service";
+import { DuplicateCandidatesBanner } from "@/components/knowledge/DuplicateCandidatesBanner";
 
 interface KnowledgeTreeProps {
   nodes: TreeNode[];
@@ -69,8 +71,30 @@ export function KnowledgeTree({
     return nodes.map(matchRecursive).filter((n): n is TreeNode => n !== null);
   }, [nodes, filter]);
 
+  // Discover duplicate candidates exceeding 0.82 similarity
+  const allFlatNodes = useMemo(() => {
+    const list: TreeNode[] = [];
+    function flatten(items: TreeNode[]) {
+      for (const item of items) {
+        list.push(item);
+        if (item.children?.length) flatten(item.children);
+      }
+    }
+    flatten(nodes);
+    return list;
+  }, [nodes]);
+
+  const duplicateCandidates = useMemo(() => {
+    return DeduplicationService.findDuplicateCandidates(allFlatNodes, [], 0.82);
+  }, [allFlatNodes]);
+
   return (
     <div className="flex flex-col gap-2">
+      {/* Duplicate Candidates Alert */}
+      {duplicateCandidates.length > 0 && (
+        <DuplicateCandidatesBanner candidates={duplicateCandidates} compact />
+      )}
+
       <div className="flex items-center gap-1.5">
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />

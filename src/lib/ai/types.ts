@@ -39,6 +39,7 @@ export interface BrainContextClaim {
   is_outdated?: boolean | undefined;
   valid_from?: string | null | undefined;
   valid_until?: string | null | undefined;
+  created_at?: string | null | undefined;
   source?: {
     title: string;
     url?: string | null | undefined;

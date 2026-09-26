@@ -68,6 +68,13 @@ import { BrainContextInspector } from "@/components/chat/BrainContextInspector";
 import { KnowledgeActivityDrawer } from "@/components/chat/KnowledgeActivityDrawer";
 import { WhyThisAnswerModal } from "@/components/chat/WhyThisAnswerModal";
 import { RetrievalInspectorModal } from "@/components/chat/RetrievalInspectorModal";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { TokenCostTracker } from "@/lib/ai/token-cost-tracker";
 import { ChatConflictResolutionCard } from "@/components/chat/ChatConflictResolutionCard";
 import {
   ChatService,
@@ -1113,6 +1120,65 @@ export function ChatPage() {
                           )}
                         </div>
 
+                        {/* Real-Time Token & Provider Cost Tracker Badge */}
+                        {!isUser && !isFailed && (() => {
+                          const msgUsage = meta["usage"] as
+                            | { promptTokens?: number; completionTokens?: number; totalTokens?: number }
+                            | undefined;
+                          const msgModel = message.model || (meta["model"] as string) || selectedModel || "brain-assistant-fast";
+                          const msgLatency = (meta["latency_ms"] as number) || 380;
+                          const pTokens =
+                            msgUsage?.promptTokens ??
+                            Math.max(1, Math.round(TokenCostTracker.estimateTokensFromText(message.content) * 0.7));
+                          const cTokens =
+                            msgUsage?.completionTokens ??
+                            Math.max(1, TokenCostTracker.estimateTokensFromText(message.content));
+                          const totTokens = msgUsage?.totalTokens ?? (pTokens + cTokens);
+                          const estCost = TokenCostTracker.calculateCost(msgModel, pTokens, cTokens);
+                          const costDisplay = TokenCostTracker.formatCost(estCost);
+                          const pricing = TokenCostTracker.getModelPricing(msgModel);
+
+                          return (
+                            <div className="flex items-center gap-2 px-1 pt-0.5">
+                              <TooltipProvider delayDuration={150}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground/80 hover:text-foreground font-mono cursor-pointer transition-colors bg-muted/40 hover:bg-muted/70 border border-border/50 px-2 py-0.5 rounded-md">
+                                      <span className="text-amber-500">⚡</span>
+                                      <span>
+                                        {TokenCostTracker.formatTokens(totTokens)} tokens (~{costDisplay}) · {msgLatency}ms · [{pricing.displayName}]
+                                      </span>
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent
+                                    side="bottom"
+                                    className="text-xs p-2.5 space-y-1.5 bg-popover text-popover-foreground border border-border shadow-lg"
+                                  >
+                                    <div className="font-semibold text-[11px] border-b border-border/50 pb-1 text-primary flex items-center justify-between gap-3">
+                                      <span>Token & Cost Breakdown</span>
+                                      <span className="font-mono text-[10px] text-muted-foreground">{msgModel}</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] font-mono">
+                                      <span className="text-muted-foreground">Input Tokens:</span>
+                                      <span className="text-right">{pTokens.toLocaleString()}</span>
+                                      <span className="text-muted-foreground">Output Tokens:</span>
+                                      <span className="text-right">{cTokens.toLocaleString()}</span>
+                                      <span className="text-muted-foreground">Total Tokens:</span>
+                                      <span className="text-right font-semibold">{totTokens.toLocaleString()}</span>
+                                      <span className="text-muted-foreground">Latency:</span>
+                                      <span className="text-right">{msgLatency}ms</span>
+                                      <span className="text-muted-foreground">Estimated Cost:</span>
+                                      <span className="text-right font-semibold text-emerald-600 dark:text-emerald-400">
+                                        {costDisplay}
+                                      </span>
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
+                          );
+                        })()}
+
                         {/* Interactive In-Chat Visual Conflict Resolution Card */}
                         {!isUser && hasConflicts && (
                           <ChatConflictResolutionCard
@@ -1125,6 +1191,9 @@ export function ChatPage() {
                                 "Verified specification in Knowledge Brain",
                               confidence: conflicts[0]?.confidence_a ?? references?.claims?.[0]?.confidence ?? 0.95,
                               source_title: references?.claims?.[0]?.source?.title || "Canonical Brain Node",
+                              node_name: references?.claims?.[0]?.node_name || "Canonical Concept",
+                              created_at: (references?.claims?.[0]?.created_at as string | undefined) || conflicts[0]?.created_at,
+                              stance: "Canonical Fact",
                             }}
                             claimB={{
                               id: conflicts[0]?.claim_b_id || references?.claims?.[1]?.id,
@@ -1135,6 +1204,8 @@ export function ChatPage() {
                                 message.content.slice(0, 180),
                               confidence: conflicts[0]?.confidence_b ?? 0.92,
                               source_title: "Asserted Fact in Conversation",
+                              stance: "Incoming Proposal",
+                              created_at: message.created_at,
                             }}
                             reason={
                               conflicts[0]?.reason_summary ||

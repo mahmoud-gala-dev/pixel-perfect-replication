@@ -21,7 +21,11 @@ import {
   CloudOff,
   Lock,
   ShieldCheck,
+  BarChart3,
+  RotateCcw,
+  Coins,
 } from "lucide-react";
+import { TokenCostTracker, type TokenUsageSummary } from "@/lib/ai/token-cost-tracker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -65,6 +69,27 @@ export function AIProviderSettingsCard() {
   // Cloud Sync State
   const [syncKeysToCloud, setSyncKeysToCloud] = useState(false);
   const [isCloudSyncLoading, setIsCloudSyncLoading] = useState(false);
+
+  // Token & Cost Usage Tracking State (Monthly / Session)
+  const [usageSummary, setUsageSummary] = useState<TokenUsageSummary>(() =>
+    TokenCostTracker.getUsageSummary(),
+  );
+
+  useEffect(() => {
+    const handleUsageUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<{ summary: TokenUsageSummary }>;
+      if (customEvent.detail?.summary) {
+        setUsageSummary(customEvent.detail.summary);
+      } else {
+        setUsageSummary(TokenCostTracker.getUsageSummary());
+      }
+    };
+
+    window.addEventListener("knowledge-brain:token-usage-updated", handleUsageUpdate);
+    return () => {
+      window.removeEventListener("knowledge-brain:token-usage-updated", handleUsageUpdate);
+    };
+  }, []);
 
   // Fetch initial cloud sync status and decrypt if present
   useEffect(() => {
@@ -569,6 +594,119 @@ export function AIProviderSettingsCard() {
             checked={syncKeysToCloud}
             onCheckedChange={handleToggleCloudSync}
           />
+        </div>
+      </div>
+
+      {/* Real-Time Token & Spending Analytics Summary (Monthly / Session) */}
+      <div className="rounded-xl border border-border/80 bg-card/40 p-4 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-3">
+          <div className="flex items-center gap-2">
+            <span className="flex size-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
+              <Coins className="size-4" />
+            </span>
+            <div>
+              <h3 className="text-sm font-semibold">Monthly & Session Token Cost Tracker</h3>
+              <p className="text-[11px] text-muted-foreground">
+                Real-time API token consumption and estimated spending per provider
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                TokenCostTracker.resetUsage();
+                toast.success("Token & spending usage counter reset to zero.");
+              }}
+              className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <RotateCcw className="size-3" />
+              Reset Usage Counter
+            </Button>
+          </div>
+        </div>
+
+        {/* Global Summary Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-2.5 space-y-1">
+            <span className="text-[10px] uppercase font-semibold text-muted-foreground">
+              Total Tokens
+            </span>
+            <div className="text-base font-bold font-mono text-foreground">
+              {usageSummary.totalTokens.toLocaleString()}
+            </div>
+            <span className="text-[10px] text-muted-foreground">
+              Prompt: {usageSummary.promptTokens.toLocaleString()}
+            </span>
+          </div>
+
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-2.5 space-y-1">
+            <span className="text-[10px] uppercase font-semibold text-muted-foreground">
+              Session Tokens
+            </span>
+            <div className="text-base font-bold font-mono text-primary">
+              {usageSummary.sessionTokens.toLocaleString()}
+            </div>
+            <span className="text-[10px] text-muted-foreground">Active Browser Tab</span>
+          </div>
+
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-2.5 space-y-1">
+            <span className="text-[10px] uppercase font-semibold text-muted-foreground">
+              Total Spending
+            </span>
+            <div className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">
+              {TokenCostTracker.formatCost(usageSummary.totalCostUsd)}
+            </div>
+            <span className="text-[10px] text-muted-foreground">Estimated API Cost</span>
+          </div>
+
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-2.5 space-y-1">
+            <span className="text-[10px] uppercase font-semibold text-muted-foreground">
+              Total Requests
+            </span>
+            <div className="text-base font-bold font-mono text-foreground">
+              {usageSummary.requestCount}
+            </div>
+            <span className="text-[10px] text-muted-foreground truncate">
+              Since {new Date(usageSummary.lastResetAt).toLocaleDateString()}
+            </span>
+          </div>
+        </div>
+
+        {/* Estimated spending counter per provider */}
+        <div className="space-y-2 pt-1">
+          <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Estimated Spending Counter Per Provider
+          </Label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {["Lovable AI", "Google Gemini", "OpenRouter"].map((pName) => {
+              const pStats = usageSummary.byProvider[pName] || {
+                totalTokens: 0,
+                estimatedCostUsd: 0,
+                requestCount: 0,
+              };
+
+              return (
+                <div
+                  key={pName}
+                  className="rounded-lg border border-border/50 bg-background/50 p-2.5 flex items-center justify-between text-xs"
+                >
+                  <div className="space-y-0.5">
+                    <span className="font-semibold text-foreground">{pName}</span>
+                    <p className="text-[10px] text-muted-foreground font-mono">
+                      {pStats.totalTokens.toLocaleString()} tokens · {pStats.requestCount} calls
+                    </p>
+                  </div>
+                  <Badge variant="secondary" className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400">
+                    {TokenCostTracker.formatCost(pStats.estimatedCostUsd)}
+                  </Badge>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 

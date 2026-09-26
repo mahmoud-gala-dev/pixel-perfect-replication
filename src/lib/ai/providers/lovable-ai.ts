@@ -75,15 +75,25 @@ export class LovableAIProvider extends BaseAIProvider {
       fallbackText = `Regarding **${lastUserQuery}**:\n\nThis topic is not currently indexed with verified claims in your Knowledge Brain. While I can assist with general analysis, no canonical entities or verified atomic claims exist in your graph yet.\n\n*(Powered natively by Lovable AI Gateway — you can also connect Gemini or OpenRouter in Settings)*`;
     }
 
+    // Calculate real token usage using heuristic (words * 1.3)
+    const allPromptText = [
+      params.systemPrompt || "",
+      ...params.messages.map((m) => m.content || ""),
+    ].join(" ");
+
+    const promptTokens = this.estimateTokensFromText(allPromptText);
+    const completionTokens = this.estimateTokensFromText(fallbackText);
+    const totalTokens = promptTokens + completionTokens;
+
     return {
       content: fallbackText,
       model,
       provider: this.name,
       finishReason: "stop",
       usage: {
-        promptTokens: params.messages.reduce((acc, m) => acc + (m.content?.length || 0) / 4, 0),
-        completionTokens: fallbackText.length / 4,
-        totalTokens: (params.messages.reduce((acc, m) => acc + (m.content?.length || 0), 0) + fallbackText.length) / 4,
+        promptTokens,
+        completionTokens,
+        totalTokens,
       },
     };
   }

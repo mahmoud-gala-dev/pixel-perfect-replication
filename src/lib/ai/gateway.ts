@@ -19,6 +19,7 @@ import type {
 } from "./types";
 
 import { AIProviderManager } from "./provider-manager";
+import { TokenCostTracker } from "./token-cost-tracker";
 
 // In-memory idempotency cache to protect against rapid duplicate requests
 const idempotencyCache = new Map<string, { timestamp: number; response: ChatResponseContract }>();
@@ -275,6 +276,17 @@ export class AIGateway {
         retrievalPackage,
         assistantMessageId,
       );
+    }
+
+    // Record real token usage metrics
+    if (tokenUsage) {
+      TokenCostTracker.recordUsage({
+        provider: provider.name,
+        model: responseModel,
+        promptTokens: tokenUsage.promptTokens || 0,
+        completionTokens: tokenUsage.completionTokens || 0,
+        latencyMs,
+      });
     }
 
     // 9. Persist Assistant Message

@@ -70,6 +70,8 @@ import { KnowledgePathService, type KnowledgePathResult } from "@/lib/knowledge-
 import { GraphRetriever } from "@/lib/ai/rag/graph-retriever";
 import type { GraphPath } from "@/lib/ai/rag/types";
 import { cn } from "@/lib/utils";
+import { DeduplicationService } from "@/lib/ai/resolution/deduplication-service";
+import { DuplicateCandidatesBanner } from "@/components/knowledge/DuplicateCandidatesBanner";
 
 export const Route = createFileRoute("/graph")({
   head: () => ({
@@ -242,6 +244,12 @@ function GraphPage() {
       }
     }
   }, [allNodes, allEdges, centerNodeId]);
+
+  // Intelligent Graph Deduplication: Detect candidates exceeding 0.82 similarity
+  const duplicateCandidates = useMemo(() => {
+    if (!allNodes || allNodes.length < 2) return [];
+    return DeduplicationService.findDuplicateCandidates(allNodes as any, [], 0.82);
+  }, [allNodes]);
 
   // Track Exploration History
   const selectAndCenterNode = (nodeId: string) => {
@@ -567,6 +575,17 @@ function GraphPage() {
           <BookOpen className="size-3.5 mr-1.5" /> Prerequisite Progression
         </Button>
       </div>
+
+      {/* Duplicate Candidates Alert & Safe Merge Banner */}
+      {duplicateCandidates.length > 0 && (
+        <DuplicateCandidatesBanner
+          candidates={duplicateCandidates}
+          onMerged={() => {
+            void queryClient.invalidateQueries({ queryKey: ["nodes-all-graph"] });
+            void queryClient.invalidateQueries({ queryKey: ["edges-all-graph"] });
+          }}
+        />
+      )}
 
       {/* VIEW 1: NEIGHBORHOOD GRAPH */}
       {viewMode === "neighborhood" && (
