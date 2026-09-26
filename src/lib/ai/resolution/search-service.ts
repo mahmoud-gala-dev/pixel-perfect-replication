@@ -216,7 +216,7 @@ export class KnowledgeSearchService {
         if (!error && Array.isArray(data)) {
           return data.map((d) => ({
             node: d as unknown as KnowledgeNode,
-            score: d.similarity,
+            score: (d as any).similarity ?? d.text_similarity,
           }));
         }
       } catch {

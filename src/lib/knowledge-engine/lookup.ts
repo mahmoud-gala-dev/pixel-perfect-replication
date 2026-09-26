@@ -52,7 +52,7 @@ export async function lookupKnowledgeNode(
   try {
     const { data, error } = await supabase.rpc("resolve_knowledge_node", {
       p_name: name.trim(),
-      p_parent_id: parentId ?? null,
+      p_parent_id: parentId ?? undefined,
       p_node_type: (nodeType ?? "topic") as Database["public"]["Enums"]["node_type"],
     });
 

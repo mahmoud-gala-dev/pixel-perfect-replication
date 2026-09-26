@@ -222,7 +222,7 @@ export class KnowledgeResolutionService {
       // Persist to Supabase if client is active
       if (this.supabase) {
         try {
-          const { data: insertedResult } = await this.supabase
+          const { data: insertedResult } = await (this.supabase as any)
             .from("knowledge_resolution_results")
             .insert({
               proposal_id: ec.proposal_id,
@@ -300,7 +300,7 @@ export class KnowledgeResolutionService {
 
       if (this.supabase) {
         try {
-          await this.supabase
+          await (this.supabase as any)
             .from("knowledge_resolution_results")
             .insert({
               proposal_id: hp.id,
@@ -357,7 +357,7 @@ export class KnowledgeResolutionService {
 
       if (this.supabase) {
         try {
-          await this.supabase
+          await (this.supabase as any)
             .from("knowledge_resolution_results")
             .insert({
               proposal_id: cp.id,
@@ -414,7 +414,7 @@ export class KnowledgeResolutionService {
 
       if (this.supabase) {
         try {
-          await this.supabase
+          await (this.supabase as any)
             .from("knowledge_resolution_results")
             .insert({
               proposal_id: rp.id,
@@ -498,7 +498,7 @@ export class KnowledgeResolutionService {
 
     if (this.supabase) {
       try {
-        await this.supabase
+        await (this.supabase as any)
           .from("knowledge_resolution_results")
           .update({
             status: newStatus,

@@ -12,4 +12,11 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    // Pre-bundle the context menu with React so Vite never re-optimizes it mid-session
+    // (that produced two React copies → "Cannot read properties of null (reading 'useRef')").
+    optimizeDeps: {
+      include: ["react", "react-dom", "@radix-ui/react-context-menu"],
+    },
+  },
 });
