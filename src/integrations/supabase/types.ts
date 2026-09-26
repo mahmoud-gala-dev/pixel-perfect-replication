@@ -2506,6 +2506,11 @@ export type Database = {
           autonomy_mode: string
           blocked_domains: Json
           daily_mission_budget: number
+          kill_switch_auto_learning: boolean
+          kill_switch_missions: boolean
+          kill_switch_research: boolean
+          kill_switch_connectors: boolean
+          kill_switch_embeddings: boolean
           learning_mode: string
           max_ai_calls_per_mission: number
           max_concurrent_missions: number
@@ -2527,6 +2532,11 @@ export type Database = {
           autonomy_mode?: string
           blocked_domains?: Json
           daily_mission_budget?: number
+          kill_switch_auto_learning?: boolean
+          kill_switch_missions?: boolean
+          kill_switch_research?: boolean
+          kill_switch_connectors?: boolean
+          kill_switch_embeddings?: boolean
           learning_mode?: string
           max_ai_calls_per_mission?: number
           max_concurrent_missions?: number
@@ -2548,6 +2558,11 @@ export type Database = {
           autonomy_mode?: string
           blocked_domains?: Json
           daily_mission_budget?: number
+          kill_switch_auto_learning?: boolean
+          kill_switch_missions?: boolean
+          kill_switch_research?: boolean
+          kill_switch_connectors?: boolean
+          kill_switch_embeddings?: boolean
           learning_mode?: string
           max_ai_calls_per_mission?: number
           max_concurrent_missions?: number
@@ -2559,6 +2574,153 @@ export type Database = {
           require_evidence_for_claims?: boolean
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      brain_user_roles: {
+        Row: {
+          id: string
+          user_id: string
+          role: string
+          granted_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          role?: string
+          granted_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          role?: string
+          granted_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      brain_audit_logs: {
+        Row: {
+          id: string
+          actor_id: string | null
+          actor_role: string
+          action: string
+          target_type: string
+          target_id: string
+          correlation_id: string | null
+          result: string
+          diff: Json
+          metadata: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          actor_id?: string | null
+          actor_role?: string
+          action: string
+          target_type: string
+          target_id: string
+          correlation_id?: string | null
+          result?: string
+          diff?: Json
+          metadata?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          actor_id?: string | null
+          actor_role?: string
+          action?: string
+          target_type?: string
+          target_id?: string
+          correlation_id?: string | null
+          result?: string
+          diff?: Json
+          metadata?: Json
+          created_at?: string
+        }
+        Relationships: []
+      }
+      brain_connectors: {
+        Row: {
+          id: string
+          user_id: string
+          connector_type: string
+          name: string
+          status: string
+          config_encrypted: string | null
+          sync_cursor: string | null
+          last_synced_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string
+          connector_type: string
+          name: string
+          status?: string
+          config_encrypted?: string | null
+          sync_cursor?: string | null
+          last_synced_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          connector_type?: string
+          name?: string
+          status?: string
+          config_encrypted?: string | null
+          sync_cursor?: string | null
+          last_synced_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      brain_connector_resources: {
+        Row: {
+          id: string
+          connector_id: string
+          user_id: string
+          external_resource_id: string
+          title: string
+          url: string | null
+          content_hash: string | null
+          status: string
+          last_seen_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          connector_id: string
+          user_id?: string
+          external_resource_id: string
+          title: string
+          url?: string | null
+          content_hash?: string | null
+          status?: string
+          last_seen_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          connector_id?: string
+          user_id?: string
+          external_resource_id?: string
+          title?: string
+          url?: string | null
+          content_hash?: string | null
+          status?: string
+          last_seen_at?: string
+          created_at?: string
         }
         Relationships: []
       }
@@ -2793,6 +2955,18 @@ export type Database = {
         Returns: Json
       }
       get_brain_maintenance_summary: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      get_user_highest_role: {
+        Args: { p_user_id?: string }
+        Returns: string
+      }
+      check_brain_data_integrity: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      get_brain_system_status: {
         Args: Record<PropertyKey, never>
         Returns: Json
       }

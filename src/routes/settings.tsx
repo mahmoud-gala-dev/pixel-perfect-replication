@@ -7,7 +7,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Brain, Shield, Sliders, CheckCircle2, Lock, Sparkles, Activity, Target } from "lucide-react";
+import { Brain, Shield, Sliders, CheckCircle2, Lock, Sparkles, Activity, Target, PowerOff, Download, RefreshCw, KeyRound, Wrench } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/hooks/useAuth";
@@ -107,13 +107,27 @@ function SettingsPage() {
       if ((brainSettingsData as any).daily_mission_budget) {
         setDailyBudget(Number((brainSettingsData as any).daily_mission_budget));
       }
+      setKillSwitches({
+        auto_learning: !!(brainSettingsData as any).kill_switch_auto_learning,
+        missions: !!(brainSettingsData as any).kill_switch_missions,
+        research: !!(brainSettingsData as any).kill_switch_research,
+        connectors: !!(brainSettingsData as any).kill_switch_connectors,
+        embeddings: !!(brainSettingsData as any).kill_switch_embeddings,
+      });
     }
   }, [brainSettingsData]);
 
   const [autonomyMode, setAutonomyMode] = useState<string>("SUGGEST");
   const [dailyBudget, setDailyBudget] = useState<number>(20);
+  const [killSwitches, setKillSwitches] = useState({
+    auto_learning: false,
+    missions: false,
+    research: false,
+    connectors: false,
+    embeddings: false,
+  });
 
-  // Save Brain Learning Settings Mutation
+  // Save Brain Learning & Governance Settings Mutation
   const saveBrainSettings = useMutation({
     mutationFn: async () => {
       if (!user) return;
@@ -130,16 +144,80 @@ function SettingsPage() {
         min_claim_confidence: learningSettings.min_claim_confidence,
         autonomy_mode: autonomyMode,
         daily_mission_budget: dailyBudget,
+        kill_switch_auto_learning: killSwitches.auto_learning,
+        kill_switch_missions: killSwitches.missions,
+        kill_switch_research: killSwitches.research,
+        kill_switch_connectors: killSwitches.connectors,
+        kill_switch_embeddings: killSwitches.embeddings,
         updated_at: new Date().toISOString(),
       });
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Brain learning & autonomy settings updated");
+      toast.success("Brain learning, autonomy & kill switch settings updated");
       void queryClient.invalidateQueries({ queryKey: ["brain-learning-settings"] });
     },
     onError: (error: Error) => toast.error(error.message),
   });
+
+  // Data Integrity state & trigger
+  const [integrityReport, setIntegrityReport] = useState<any>(null);
+  const [isAuditing, setIsAuditing] = useState(false);
+
+  const runIntegrityAudit = async () => {
+    setIsAuditing(true);
+    try {
+      const { data, error } = await supabase.rpc("check_brain_data_integrity" as any);
+      if (error) throw error;
+      setIntegrityReport(data);
+      toast.success("Brain Data Integrity Audit completed!");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to run integrity audit");
+    } finally {
+      setIsAuditing(false);
+    }
+  };
+
+  const exportBrain = async () => {
+    try {
+      const { data: nodes } = await supabase.from("knowledge_nodes").select("*").limit(1000);
+      const { data: edges } = await supabase.from("knowledge_edges").select("*").limit(2000);
+      const { data: claims } = await supabase.from("knowledge_claims").select("*").limit(3000);
+      const { data: sources } = await supabase.from("sources").select("*").limit(500);
+
+      const pkg = {
+        manifest: {
+          manifest_version: "1.0.0",
+          schema_version: "2026-09",
+          exported_at: new Date().toISOString(),
+          scope: "user",
+          counts: {
+            nodes: nodes?.length || 0,
+            edges: edges?.length || 0,
+            claims: claims?.length || 0,
+            sources: sources?.length || 0,
+          },
+        },
+        data: {
+          nodes: nodes || [],
+          edges: edges || [],
+          claims: claims || [],
+          sources: sources || [],
+        },
+      };
+
+      const blob = new Blob([JSON.stringify(pkg, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `brain-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Brain Export Package downloaded successfully.");
+    } catch (err: any) {
+      toast.error("Export failed: " + err.message);
+    }
+  };
 
   return (
     <AppShell title="Settings" description="Manage account profile and Brain learning governance.">
@@ -486,6 +564,183 @@ function SettingsPage() {
               <CheckCircle2 className="size-4" /> Save Autonomy & Budget Settings
             </Button>
           </div>
+        </div>
+
+        {/* Phase 12: Emergency Kill Switches Panel */}
+        <div className="panel space-y-5 p-6 border-destructive/20 bg-destructive/5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold flex items-center gap-2 text-destructive">
+                <PowerOff className="size-4 text-destructive" />
+                <span>Emergency Kill Switches (Administrative Governance)</span>
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Instantly halt expensive or autonomous subsystems without affecting basic read, search, and chat access.
+              </p>
+            </div>
+            <Badge variant="outline" className="text-destructive border-destructive/30 text-[10px]">
+              Admin Control
+            </Badge>
+          </div>
+
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-xs font-medium">Halt Automatic Learning</Label>
+                <p className="text-[11px] text-muted-foreground">Stops conversation extraction and automatic plan execution.</p>
+              </div>
+              <Switch
+                checked={killSwitches.auto_learning}
+                onCheckedChange={(checked) => setKillSwitches((prev) => ({ ...prev, auto_learning: checked }))}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-xs font-medium">Halt Autonomous Missions</Label>
+                <p className="text-[11px] text-muted-foreground">Freezes mission queue and pauses background agent tasks.</p>
+              </div>
+              <Switch
+                checked={killSwitches.missions}
+                onCheckedChange={(checked) => setKillSwitches((prev) => ({ ...prev, missions: checked }))}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-xs font-medium">Halt External Web Research</Label>
+                <p className="text-[11px] text-muted-foreground">Blocks all outbound web and provider search calls.</p>
+              </div>
+              <Switch
+                checked={killSwitches.research}
+                onCheckedChange={(checked) => setKillSwitches((prev) => ({ ...prev, research: checked }))}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-xs font-medium">Halt Connector Synchronization</Label>
+                <p className="text-[11px] text-muted-foreground">Pauses external data source ingestion (GitHub, Web, Notion).</p>
+              </div>
+              <Switch
+                checked={killSwitches.connectors}
+                onCheckedChange={(checked) => setKillSwitches((prev) => ({ ...prev, connectors: checked }))}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-xs font-medium">Halt Vector Embedding Jobs</Label>
+                <p className="text-[11px] text-muted-foreground">Degrades semantic search gracefully to exact & lexical fallback.</p>
+              </div>
+              <Switch
+                checked={killSwitches.embeddings}
+                onCheckedChange={(checked) => setKillSwitches((prev) => ({ ...prev, embeddings: checked }))}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={saveBrainSettings.isPending}
+              onClick={() => saveBrainSettings.mutate()}
+              className="gap-1.5"
+            >
+              <PowerOff className="size-3.5" /> Apply Kill Switches
+            </Button>
+          </div>
+        </div>
+
+        {/* Phase 12: Governance & User Role Panel */}
+        <div className="panel space-y-4 p-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold flex items-center gap-2">
+              <KeyRound className="size-4 text-primary" />
+              <span>Governance & Authority Model</span>
+            </h2>
+            <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
+              ROLE: ADMIN
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Server-enforced role-based access control (RBAC). Sensitive mutations, rollbacks, and merges require verified privileges.
+          </p>
+          <div className="grid grid-cols-2 gap-2 pt-2 text-[11px]">
+            <div className="flex items-center gap-1.5 text-foreground/80">
+              <CheckCircle2 className="size-3.5 text-emerald-500" /> Read & Hybrid Search
+            </div>
+            <div className="flex items-center gap-1.5 text-foreground/80">
+              <CheckCircle2 className="size-3.5 text-emerald-500" /> Edit & Create Proposals
+            </div>
+            <div className="flex items-center gap-1.5 text-foreground/80">
+              <CheckCircle2 className="size-3.5 text-emerald-500" /> Verify & Dispute Claims
+            </div>
+            <div className="flex items-center gap-1.5 text-foreground/80">
+              <CheckCircle2 className="size-3.5 text-emerald-500" /> Resolve Conflicts & Rollback
+            </div>
+            <div className="flex items-center gap-1.5 text-foreground/80">
+              <CheckCircle2 className="size-3.5 text-emerald-500" /> Node Merges & Restructuring
+            </div>
+            <div className="flex items-center gap-1.5 text-foreground/80">
+              <CheckCircle2 className="size-3.5 text-emerald-500" /> Emergency Kill Switches
+            </div>
+          </div>
+        </div>
+
+        {/* Phase 12: Data Integrity & Disaster Recovery Panel */}
+        <div className="panel space-y-4 p-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold flex items-center gap-2">
+              <Wrench className="size-4 text-muted-foreground" />
+              <span>Data Integrity & Portability</span>
+            </h2>
+            <Badge variant="outline" className="text-[10px]">
+              PostgreSQL Ground Truth
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Audit graph hierarchy, verify foreign key consistency, and export portable structured knowledge packages.
+          </p>
+
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={exportBrain}
+            >
+              <Download className="size-3.5" /> Export Brain (JSON)
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={runIntegrityAudit}
+              disabled={isAuditing}
+            >
+              <RefreshCw className={`size-3.5 ${isAuditing ? "animate-spin" : ""}`} />
+              Verify Data Integrity
+            </Button>
+          </div>
+
+          {integrityReport && (
+            <div className="mt-3 p-3 rounded-lg border border-border/60 bg-muted/20 text-xs space-y-2">
+              <div className="flex items-center justify-between font-medium">
+                <span>Integrity Status:</span>
+                <span className={integrityReport.is_healthy ? "text-emerald-500" : "text-amber-500"}>
+                  {integrityReport.is_healthy ? "HEALTHY (Zero anomalies)" : `${integrityReport.issues_count} issues found`}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 text-[11px] text-muted-foreground">
+                <div>Circular Parents: {integrityReport.metrics?.circular_parents ?? 0}</div>
+                <div>Dangling Edges: {integrityReport.metrics?.dangling_edges ?? 0}</div>
+                <div>Orphan Claims: {integrityReport.metrics?.orphan_claims ?? 0}</div>
+                <div>Broken Sources: {integrityReport.metrics?.broken_sources ?? 0}</div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Privacy Note */}

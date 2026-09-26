@@ -739,4 +739,38 @@ export class EntityResolver {
 
     return results;
   }
+
+  /**
+   * Convenience resolution method for resolving a single entity name or candidate input.
+   * Maps existing canonical nodes to MATCHED status with resolved_node_id.
+   */
+  public async resolve(
+    nameOrCandidate: string | ResolveEntityCandidateInput,
+    context?: EntityResolverContext
+  ): Promise<{
+    status: "MATCHED" | "NEW" | "AMBIGUOUS" | "UNRESOLVED";
+    resolved_node_id: string | null;
+    confidence: number;
+    rawResult: EntityResolutionResult;
+  }> {
+    const input: ResolveEntityCandidateInput =
+      typeof nameOrCandidate === "string"
+        ? { name: nameOrCandidate }
+        : nameOrCandidate;
+
+    const res = await this.resolveEntity(input, context);
+
+    let mappedStatus: "MATCHED" | "NEW" | "AMBIGUOUS" | "UNRESOLVED" = "UNRESOLVED";
+    if (res.status === "EXISTING") mappedStatus = "MATCHED";
+    else if (res.status === "NEW") mappedStatus = "NEW";
+    else if (res.status === "AMBIGUOUS" || res.status === "POSSIBLE_DUPLICATE") mappedStatus = "AMBIGUOUS";
+
+    return {
+      status: mappedStatus,
+      resolved_node_id: res.canonical_node_id,
+      confidence: res.resolution_confidence,
+      rawResult: res,
+    };
+  }
 }
+
