@@ -1,10 +1,10 @@
 // =====================================================================
 // KNOWLEDGE BRAIN — P1: GLOBAL FLOATING QUICK-CAPTURE ACTION
-// Keyboard shortcut (Cmd+Shift+N / Ctrl+Shift+N) & Floating Action Button
-// Direct capture into verified claims and evidence with zero friction
+// Keyboard shortcut (Cmd+Shift+K / Ctrl+Shift+K / Cmd+Shift+N) & FAB
+// Freeform text, note or code snippet with Voice Input & Live Extraction Preview
 // =====================================================================
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -19,6 +19,11 @@ import {
   Search,
   Sparkles,
   Loader2,
+  Mic,
+  MicOff,
+  Globe,
+  Tag,
+  Code,
 } from "lucide-react";
 
 import {
@@ -48,11 +53,18 @@ import {
   safeCreateKnowledgeNode,
   normalizeSourceUrl,
 } from "@/lib/knowledge-engine";
+import { useVoiceInput } from "@/hooks/useVoiceInput";
+import { MockExtractionEngine } from "@/lib/ai/extraction/mock-extractor";
 
 interface QuickNodeItem {
   id: string;
   canonical_name: string;
   node_type?: string;
+}
+
+interface ExtractedPreview {
+  entities: Array<{ name: string; node_type: string; confidence: number }>;
+  claims: Array<{ statement: string; confidence: number }>;
 }
 
 export function QuickCaptureModal() {
@@ -74,10 +86,33 @@ export function QuickCaptureModal() {
   const [showDropdown, setShowDropdown] = useState(false);
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Keyboard shortcut listener: Cmd+Shift+N or Ctrl+Shift+N
+  // Live Extraction Preview State
+  const [extractedPreview, setExtractedPreview] = useState<ExtractedPreview | null>(null);
+  const [isExtractingPreview, setIsExtractingPreview] = useState(false);
+  const extractDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Voice Input Integration (Bilingual Arabic/English)
+  const [voiceLanguage, setVoiceLanguage] = useState<"ar-SA" | "en-US">("ar-SA");
+  const {
+    isListening,
+    toggleListening,
+    setLanguage: setVoiceLang,
+  } = useVoiceInput({
+    lang: voiceLanguage,
+    onResult: (spokenText) => {
+      setStatement((prev) => (prev ? `${prev.trim()} ${spokenText.trim()}` : spokenText));
+    },
+  });
+
+  // Global Keyboard shortcuts: Cmd+Shift+K / Ctrl+Shift+K & Cmd+Shift+N / Ctrl+Shift+N
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "n" || e.key === "N")) {
+      const isCmdOrCtrl = e.metaKey || e.ctrlKey;
+      if (
+        isCmdOrCtrl &&
+        e.shiftKey &&
+        (e.key === "k" || e.key === "K" || e.key === "n" || e.key === "N")
+      ) {
         e.preventDefault();
         setIsOpen((prev) => !prev);
       }
@@ -86,6 +121,70 @@ export function QuickCaptureModal() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  // Background Lightweight Entity & Claim Extraction Pipeline
+  useEffect(() => {
+    const text = statement.trim();
+    if (text.length < 12) {
+      setExtractedPreview(null);
+      return;
+    }
+
+    if (extractDebounceRef.current) clearTimeout(extractDebounceRef.current);
+
+    extractDebounceRef.current = setTimeout(() => {
+      setIsExtractingPreview(true);
+      try {
+        const raw = MockExtractionEngine.extract([{ role: "user", content: text }]);
+        const entities = (raw.entities || []).map((e) => ({
+          name: e.name,
+          node_type: e.entity_type || "concept",
+          confidence: e.confidence ?? 0.9,
+        }));
+        const claims = (raw.claims || []).map((c) => ({
+          statement: c.statement,
+          confidence: c.confidence ?? 0.88,
+        }));
+
+        if (entities.length > 0 || claims.length > 0) {
+          setExtractedPreview({ entities, claims });
+          // If no node selected yet, suggest the top extracted entity
+          if (!selectedNode && !nodeQuery.trim() && entities[0]) {
+            setNodeQuery(entities[0].name);
+          }
+        } else {
+          // Heuristic extraction for code or notes (extract capitalized keywords or tech terms)
+          const techTokens = text.match(
+            /\b(?:React|Vue|Laravel|Python|Docker|Kubernetes|PostgreSQL|Redis|TypeScript|Node\.js|GraphQL|Next\.js|LLM|Transformer|Embedding|[A-Z][a-zA-Z0-9_\-\.]+)\b/g,
+          );
+          if (techTokens && techTokens.length > 0) {
+            const unique = Array.from(new Set(techTokens)).slice(0, 3);
+            setExtractedPreview({
+              entities: unique.map((token) => ({
+                name: token,
+                node_type: "concept",
+                confidence: 0.9,
+              })),
+              claims: [{ statement: text.slice(0, 160), confidence: 0.85 }],
+            });
+            if (!selectedNode && !nodeQuery.trim() && unique[0]) {
+              setNodeQuery(unique[0]);
+            }
+          } else {
+            setExtractedPreview(null);
+          }
+        }
+      } catch {
+        setExtractedPreview(null);
+      } finally {
+        setIsExtractingPreview(false);
+      }
+    }, 350);
+
+    return () => {
+      if (extractDebounceRef.current) clearTimeout(extractDebounceRef.current);
+    };
+  }, [statement, selectedNode, nodeQuery]);
 
   // Search Knowledge Nodes with lexical search and fuzzy fallback
   useEffect(() => {
@@ -172,13 +271,14 @@ export function QuickCaptureModal() {
     setStance("supported");
     setSourceUrl("");
     setCitationTitle("");
+    setExtractedPreview(null);
     setIsSubmitting(false);
   };
 
   const handleSaveToBrain = async () => {
     const trimmedStatement = statement.trim();
     if (!trimmedStatement) {
-      toast.error("Please enter a fact or claim statement.");
+      toast.error("Please enter a fact, note, or claim statement.");
       return;
     }
 
@@ -302,13 +402,13 @@ export function QuickCaptureModal() {
           type="button"
           onClick={() => setIsOpen(true)}
           className="flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-primary text-primary-foreground font-medium text-xs shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:scale-105 active:scale-95 transition-all duration-200 border border-primary/40"
-          title="Quick Brain Capture (Ctrl+Shift+N / ⌘+Shift+N)"
+          title="Quick Brain Capture (Ctrl+Shift+K / ⌘+Shift+K / ⌘⇧N)"
           aria-label="Quick Brain Capture"
         >
           <Zap className="size-4 animate-pulse fill-primary-foreground/30" />
           <span className="hidden sm:inline">Quick Capture</span>
           <span className="text-[10px] opacity-75 font-mono px-1 py-0.2 bg-primary-foreground/15 rounded hidden md:inline">
-            ⌘⇧N
+            ⌘⇧K
           </span>
         </button>
       </div>
@@ -326,24 +426,54 @@ export function QuickCaptureModal() {
                   Quick Brain Capture / تدوين فوري
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground">
-                  Capture facts, insights, and verified claims directly to the Knowledge Brain.
+                  Capture facts, code snippets, and verified claims directly to the Knowledge Brain.
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Note / Fact Content Input */}
+            {/* Note / Fact Content Input with Voice Dictation */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="quick-claim-statement" className="text-xs font-medium">
-                  Note / Fact Statement <span className="text-destructive">*</span>
+                  Note, Fact, or Code Snippet <span className="text-destructive">*</span>
                 </Label>
-                <span className="text-[10px] text-muted-foreground">Markdown supported</span>
+                <div className="flex items-center gap-1.5">
+                  {/* Language switch */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = voiceLanguage === "ar-SA" ? "en-US" : "ar-SA";
+                      setVoiceLanguage(next);
+                      setVoiceLang(next);
+                    }}
+                    className="text-[10px] text-muted-foreground hover:text-foreground p-0.5 rounded"
+                    title="Toggle Voice Language"
+                  >
+                    <Globe className="size-3 inline mr-0.5" />
+                    <span className="font-mono text-[9px]">{voiceLanguage === "ar-SA" ? "AR" : "EN"}</span>
+                  </button>
+
+                  {/* Dictation button */}
+                  <Button
+                    type="button"
+                    variant={isListening ? "destructive" : "ghost"}
+                    size="sm"
+                    onClick={() => toggleListening()}
+                    className={`h-6 px-1.5 text-[10px] gap-1 ${
+                      isListening ? "animate-pulse" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    title={isListening ? "Stop listening" : "Dictate with voice"}
+                  >
+                    {isListening ? <MicOff className="size-3" /> : <Mic className="size-3" />}
+                    <span>{isListening ? "Listening..." : "Dictate"}</span>
+                  </Button>
+                </div>
               </div>
               <Textarea
                 id="quick-claim-statement"
-                placeholder="e.g. Transformers use multi-head self-attention to process tokens in parallel without sequential recurrent bottlenecks."
+                placeholder="Write a factual note, hypothesis, or code snippet... (e.g. 'PostgreSQL indexes use B-Trees by default')"
                 value={statement}
                 onChange={(e) => setStatement(e.target.value)}
                 rows={3}
@@ -351,6 +481,51 @@ export function QuickCaptureModal() {
                 autoFocus
               />
             </div>
+
+            {/* AI Lightweight Extraction Preview */}
+            {isExtractingPreview ? (
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground py-1">
+                <Loader2 className="size-3 animate-spin text-primary" />
+                <span>Extracting candidate concepts and claims...</span>
+              </div>
+            ) : extractedPreview && (extractedPreview.entities.length > 0 || extractedPreview.claims.length > 0) ? (
+              <div className="rounded-lg border border-primary/25 bg-primary/5 p-2.5 space-y-1.5 animate-in fade-in-50 text-xs">
+                <div className="flex items-center justify-between text-[11px] font-medium text-primary">
+                  <span className="flex items-center gap-1">
+                    <Sparkles className="size-3" />
+                    <span>AI Extracted Preview</span>
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">Click concept to tag</span>
+                </div>
+
+                {extractedPreview.entities.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                      <Tag className="size-2.5" /> Concepts:
+                    </span>
+                    {extractedPreview.entities.map((ent, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setNodeQuery(ent.name);
+                        }}
+                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-colors border ${
+                          nodeQuery.toLowerCase() === ent.name.toLowerCase()
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background text-foreground hover:bg-muted border-border"
+                        }`}
+                      >
+                        <span>{ent.name}</span>
+                        <span className="text-[9px] opacity-75 font-mono">
+                          {Math.round(ent.confidence * 100)}%
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
 
             {/* Concept / Node Tag with Autocomplete */}
             <div className="space-y-1.5 relative">
@@ -461,7 +636,7 @@ export function QuickCaptureModal() {
                 </Label>
                 <Input
                   id="quick-citation-title"
-                  placeholder="e.g. Attention Is All You Need"
+                  placeholder="e.g. Official Documentation"
                   value={citationTitle}
                   onChange={(e) => setCitationTitle(e.target.value)}
                   className="text-xs h-8"
@@ -477,7 +652,7 @@ export function QuickCaptureModal() {
               </Label>
               <Input
                 id="quick-source-url"
-                placeholder="https://arxiv.org/abs/1706.03762"
+                placeholder="https://docs.example.com/spec"
                 value={sourceUrl}
                 onChange={(e) => setSourceUrl(e.target.value)}
                 className="text-xs h-8 font-mono"

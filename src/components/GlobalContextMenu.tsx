@@ -608,7 +608,7 @@ export function GlobalContextMenu({ children }: GlobalContextMenuProps) {
             >
               <Zap className="size-4 text-primary" />
               <span>Quick Capture Note / Fact (Save to Brain)</span>
-              <CommandShortcut>⌘⇧N</CommandShortcut>
+              <CommandShortcut>⌘⇧K</CommandShortcut>
             </CommandItem>
           </CommandGroup>
 

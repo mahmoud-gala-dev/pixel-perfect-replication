@@ -7,7 +7,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Brain, Shield, Sliders, CheckCircle2, Lock, Sparkles, Activity, Target, PowerOff, Download, RefreshCw, KeyRound, Wrench } from "lucide-react";
+import { Brain, Shield, Sliders, CheckCircle2, Lock, Sparkles, Activity, Target, PowerOff, Download, RefreshCw, KeyRound, Wrench, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/hooks/useAuth";
@@ -22,6 +22,7 @@ import {
   type LearningMode,
 } from "@/lib/ai/learning/types";
 import { AIProviderSettingsCard } from "@/components/settings/AIProviderSettingsCard";
+import { AIProviderManager } from "@/lib/ai/provider-manager";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -101,7 +102,11 @@ function SettingsPage() {
         min_node_confidence: Number(brainSettingsData.min_node_confidence ?? 0.9),
         min_relation_confidence: Number(brainSettingsData.min_relation_confidence ?? 0.85),
         min_claim_confidence: Number(brainSettingsData.min_claim_confidence ?? 0.9),
+        solo_direct_commit: (brainSettingsData as any).solo_direct_commit ?? false,
       });
+      if ((brainSettingsData as any).solo_direct_commit !== undefined) {
+        AIProviderManager.updateSettings({ solo_direct_commit: (brainSettingsData as any).solo_direct_commit });
+      }
       if ((brainSettingsData as any).autonomy_mode) {
         setAutonomyMode((brainSettingsData as any).autonomy_mode);
       }
@@ -132,7 +137,7 @@ function SettingsPage() {
   const saveBrainSettings = useMutation({
     mutationFn: async () => {
       if (!user) return;
-      const { error } = await supabase.from("knowledge_settings").upsert({
+      const { error } = await (supabase.from("knowledge_settings") as any).upsert({
         user_id: user.id,
         learning_mode: learningSettings.learning_mode,
         auto_create_nodes: learningSettings.auto_create_nodes,
@@ -143,6 +148,7 @@ function SettingsPage() {
         min_node_confidence: learningSettings.min_node_confidence,
         min_relation_confidence: learningSettings.min_relation_confidence,
         min_claim_confidence: learningSettings.min_claim_confidence,
+        solo_direct_commit: learningSettings.solo_direct_commit ?? false,
         autonomy_mode: autonomyMode,
         daily_mission_budget: dailyBudget,
         kill_switch_auto_learning: killSwitches.auto_learning,
@@ -155,7 +161,8 @@ function SettingsPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Brain learning, autonomy & kill switch settings updated");
+      AIProviderManager.updateSettings({ solo_direct_commit: learningSettings.solo_direct_commit ?? false });
+      toast.success("Brain learning, solo fast-track & governance settings updated");
       void queryClient.invalidateQueries({ queryKey: ["brain-learning-settings"] });
     },
     onError: (error: Error) => toast.error(error.message),
@@ -295,6 +302,36 @@ function SettingsPage() {
                     learning_mode: checked ? "auto" : "review",
                   }))
                 }
+              />
+            </div>
+          </div>
+
+          {/* Solo Fast-Track Mode (P0 Solo Auto-Catalog) */}
+          <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Zap className="size-4 text-primary animate-pulse" />
+                  <Label className="text-sm font-semibold text-primary">
+                    Solo Fast-Track Mode (التسجيل الفوري المباشر)
+                  </Label>
+                  <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
+                    Solo Power User
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  High-confidence proposals (&gt;90% confidence, zero ambiguity) commit directly to canonical nodes and claims without manual approval in /proposals.
+                </p>
+                <p className="text-[11px] text-amber-500 font-medium">
+                  🛡️ Zero-Corruption Safety Gate: Any conflict, ambiguity, or duplicate risk automatically diverts to /proposals.
+                </p>
+              </div>
+              <Switch
+                checked={learningSettings.solo_direct_commit ?? false}
+                onCheckedChange={(checked) => {
+                  setLearningSettings((prev) => ({ ...prev, solo_direct_commit: checked }));
+                  AIProviderManager.updateSettings({ solo_direct_commit: checked });
+                }}
               />
             </div>
           </div>

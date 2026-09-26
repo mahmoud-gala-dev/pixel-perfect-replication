@@ -278,3 +278,79 @@ describe("P2: VOICE INPUT & DICTATION HUB TESTS", () => {
     assert.ok(cmdContent.includes("toggleListening"), "GlobalContextMenu must support speech toggling");
   });
 });
+
+describe("VISUAL CONFLICT RESOLUTION & SOLO FAST-TRACK SETTINGS TESTS", () => {
+  test("1. Settings Page — Includes Solo Fast-Track toggle and state sync", () => {
+    const settingsPath = path.join(process.cwd(), "src", "routes", "settings.tsx");
+    const content = fs.readFileSync(settingsPath, "utf-8");
+    assert.ok(
+      content.includes("Solo Fast-Track Mode"),
+      "settings.tsx must contain 'Solo Fast-Track Mode'",
+    );
+    assert.ok(
+      content.includes("solo_direct_commit"),
+      "settings.tsx must bind solo_direct_commit setting",
+    );
+  });
+
+  test("2. Chat Conflict Resolution Card Component Exists & Exports Card", () => {
+    const cardPath = path.join(
+      process.cwd(),
+      "src",
+      "components",
+      "chat",
+      "ChatConflictResolutionCard.tsx",
+    );
+    assert.ok(fs.existsSync(cardPath), "ChatConflictResolutionCard.tsx must exist");
+    const content = fs.readFileSync(cardPath, "utf-8");
+    assert.ok(
+      content.includes("export function ChatConflictResolutionCard"),
+      "Must export ChatConflictResolutionCard",
+    );
+    assert.ok(
+      content.includes("ONE_SUPERSEDES_ANOTHER"),
+      "Must support 'Approve New Fact (Supersede Old)'",
+    );
+    assert.ok(
+      content.includes("BOTH_VALID_DIFFERENT_CONTEXT"),
+      "Must support 'Preserve Both with Context/Conditions'",
+    );
+    assert.ok(
+      content.includes("A_SUPPORTED"),
+      "Must support 'Discard New Proposal'",
+    );
+  });
+
+  test("3. In-Chat Integration — Chat renders ChatConflictResolutionCard on dispute", () => {
+    const chatPath = path.join(process.cwd(), "src", "routes", "chat.tsx");
+    const chatContent = fs.readFileSync(chatPath, "utf-8");
+    assert.ok(
+      chatContent.includes("ChatConflictResolutionCard"),
+      "chat.tsx must render ChatConflictResolutionCard on conflicts",
+    );
+  });
+
+  test("4. Quick Capture Modal — Supports Cmd+Shift+K and background extraction preview", () => {
+    const modalPath = path.join(
+      process.cwd(),
+      "src",
+      "components",
+      "knowledge",
+      "QuickCaptureModal.tsx",
+    );
+    const content = fs.readFileSync(modalPath, "utf-8");
+    assert.ok(
+      content.includes('"k"') || content.includes("'k'"),
+      "QuickCaptureModal must listen for 'k' key (Cmd+Shift+K)",
+    );
+    assert.ok(
+      content.includes("AI Extracted Preview"),
+      "QuickCaptureModal must show AI Extracted Preview",
+    );
+    assert.ok(
+      content.includes("MockExtractionEngine.extract"),
+      "QuickCaptureModal must invoke background extraction engine",
+    );
+  });
+});
+

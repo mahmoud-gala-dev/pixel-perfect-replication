@@ -68,6 +68,7 @@ import { BrainContextInspector } from "@/components/chat/BrainContextInspector";
 import { KnowledgeActivityDrawer } from "@/components/chat/KnowledgeActivityDrawer";
 import { WhyThisAnswerModal } from "@/components/chat/WhyThisAnswerModal";
 import { RetrievalInspectorModal } from "@/components/chat/RetrievalInspectorModal";
+import { ChatConflictResolutionCard } from "@/components/chat/ChatConflictResolutionCard";
 import {
   ChatService,
   KnowledgeExtractionService,
@@ -1112,12 +1113,34 @@ export function ChatPage() {
                           )}
                         </div>
 
-                        {/* Unresolved Conflict Banner */}
+                        {/* Interactive In-Chat Visual Conflict Resolution Card */}
                         {!isUser && hasConflicts && (
-                          <div className="flex items-center gap-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs mt-1">
-                            <AlertTriangle className="size-3.5 shrink-0 text-amber-600" />
-                            <span>Knowledge contains unresolved disagreement. Inspect claims in &quot;Why this answer?&quot;.</span>
-                          </div>
+                          <ChatConflictResolutionCard
+                            conflictId={conflicts[0]?.id}
+                            claimA={{
+                              id: conflicts[0]?.claim_a_id || references?.claims?.[0]?.id,
+                              statement:
+                                conflicts[0]?.statement_a ||
+                                references?.claims?.[0]?.statement ||
+                                "Verified specification in Knowledge Brain",
+                              confidence: conflicts[0]?.confidence_a ?? references?.claims?.[0]?.confidence ?? 0.95,
+                              source_title: references?.claims?.[0]?.source?.title || "Canonical Brain Node",
+                            }}
+                            claimB={{
+                              id: conflicts[0]?.claim_b_id || references?.claims?.[1]?.id,
+                              statement:
+                                conflicts[0]?.statement_b ||
+                                conflicts[0]?.statement ||
+                                references?.claims?.[1]?.statement ||
+                                message.content.slice(0, 180),
+                              confidence: conflicts[0]?.confidence_b ?? 0.92,
+                              source_title: "Asserted Fact in Conversation",
+                            }}
+                            reason={
+                              conflicts[0]?.reason_summary ||
+                              "Opposing factual assertions detected between existing verified Brain claim and conversational input."
+                            }
+                          />
                         )}
 
                         {/* Attached Sources Reference */}
